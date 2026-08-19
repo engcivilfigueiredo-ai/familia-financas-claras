@@ -1,0 +1,120 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+
+export type TableName =
+  | "family_members"
+  | "accounts"
+  | "credit_cards"
+  | "categories"
+  | "transactions"
+  | "recurring_transactions"
+  | "installments"
+  | "invoices"
+  | "investments"
+  | "investment_transactions"
+  | "assets"
+  | "liabilities"
+  | "budgets"
+  | "financial_goals"
+  | "notifications";
+
+const ORDER: Partial<Record<TableName, { column: string; ascending: boolean }>> = {
+  transactions: { column: "date", ascending: false },
+  categories: { column: "sort_order", ascending: true },
+  family_members: { column: "created_at", ascending: true },
+  accounts: { column: "created_at", ascending: true },
+  credit_cards: { column: "created_at", ascending: true },
+  investments: { column: "created_at", ascending: true },
+  investment_transactions: { column: "date", ascending: false },
+  assets: { column: "created_at", ascending: true },
+  liabilities: { column: "created_at", ascending: true },
+  budgets: { column: "month_reference", ascending: false },
+  financial_goals: { column: "target_date", ascending: true },
+  recurring_transactions: { column: "start_date", ascending: false },
+  notifications: { column: "created_at", ascending: false },
+};
+
+export function useTable<T = Record<string, unknown>>(table: TableName) {
+  return useQuery({
+    queryKey: [table],
+    queryFn: async (): Promise<T[]> => {
+      const order = ORDER[table];
+      let query = supabase.from(table).select("*");
+      if (order) query = query.order(order.column, { ascending: order.ascending });
+      const { data, error } = await query;
+      if (error) throw new Error(error.message);
+      return (data ?? []) as T[];
+    },
+  });
+}
+
+async function currentUserId(): Promise<string> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) throw new Error("Sessão expirada. Faça login novamente.");
+  return data.user.id;
+}
+
+export function useInvalidateFinance() {
+  const qc = useQueryClient();
+  return () => {
+    for (const key of [
+      "transactions",
+      "accounts",
+      "credit_cards",
+      "categories",
+      "family_members",
+      "investments",
+      "investment_transactions",
+      "installments",
+      "invoices",
+      "assets",
+      "liabilities",
+      "budgets",
+      "financial_goals",
+      "recurring_transactions",
+      "notifications",
+    ]) {
+      qc.invalidateQueries({ queryKey: [key] });
+    }
+  };
+}
+
+export function useUpsert(table: TableName, successMessage = "Salvo com sucesso") {
+  const invalidate = useInvalidateFinance();
+  return useMutation({
+    mutationFn: async (payload: Record<string, unknown> & { id?: string }) => {
+      const user_id = await currentUserId();
+      const body = { ...payload, user_id };
+      if (payload.id) {
+        const { error } = await supabase.from(table).update(body).eq("id", payload.id);
+        if (error) throw new Error(error.message);
+      } else {
+        const { error } = await supabase.from(table).insert(body);
+        if (error) throw new Error(error.message);
+      }
+    },
+    onSuccess: () => {
+      invalidate();
+      toast.success(successMessage);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+}
+
+export function useRemove(table: TableName, successMessage = "Excluído com sucesso") {
+  const invalidate = useInvalidateFinance();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from(table).delete().eq("id", id);
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      invalidate();
+      toast.success(successMessage);
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+}
+
+export { currentUserId };
