@@ -86,14 +86,20 @@ export function useUpsert(table: TableName, successMessage = "Salvo com sucesso"
     mutationFn: async (payload: Record<string, unknown> & { id?: string }) => {
       const user_id = await currentUserId();
       const body = { ...payload, user_id };
+      // Generic table writer: the row shape is validated by each form.
+      const client = supabase.from(table) as unknown as {
+        update: (b: unknown) => { eq: (c: string, v: string) => Promise<{ error: { message: string } | null }> };
+        insert: (b: unknown) => Promise<{ error: { message: string } | null }>;
+      };
       if (payload.id) {
-        const { error } = await supabase.from(table).update(body).eq("id", payload.id);
+        const { error } = await client.update(body).eq("id", payload.id);
         if (error) throw new Error(error.message);
       } else {
-        const { error } = await supabase.from(table).insert(body);
+        const { error } = await client.insert(body);
         if (error) throw new Error(error.message);
       }
     },
+
     onSuccess: () => {
       invalidate();
       toast.success(successMessage);
