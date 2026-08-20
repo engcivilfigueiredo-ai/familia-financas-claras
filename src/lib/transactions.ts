@@ -135,7 +135,7 @@ export async function createInstallmentPurchase(input: InstallmentInput, card: C
       family_member_id: input.family_member_id,
       payment_method: "crédito",
       status: "pendente",
-      installment_id: parent?.id,
+      installment_id: parent?.id ?? null,
       installment_number: i + 1,
       invoice_month,
       notes: input.notes,
