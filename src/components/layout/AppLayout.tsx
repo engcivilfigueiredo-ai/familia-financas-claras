@@ -130,7 +130,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [kind, setKind] = useState<QuickKind>("despesa");
 
-  useSeedDefaults(user?.id, (user?.user_metadata?.full_name as string) ?? user?.email?.split("@")[0]);
+  useSeedDefaults(user?.id, (user?.user_metadata?.["full_name"] as string) ?? user?.email?.split("@")[0]);
 
   const activeMembers = useMemo(
     () => (members.data ?? []).filter((m) => m.is_active),
