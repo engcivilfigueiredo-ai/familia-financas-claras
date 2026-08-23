@@ -171,7 +171,7 @@ function AccountsPage() {
                     <CardTitle className="text-base">{row.name}</CardTitle>
                     <p className="text-xs text-muted-foreground">
                       {row.institution || "Sem instituição"} ·{" "}
-                      {ACCOUNT_TYPES.find((t) => t.value === row.type)?.label ?? row.type}
+                      {row.type}
                     </p>
                   </div>
                 </div>
