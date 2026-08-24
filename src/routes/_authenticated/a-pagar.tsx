@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { EmptyState, PageHeader } from "@/components/shared/states";
+import { PendingList } from "@/components/shared/pending-list";
 
 export const Route = createFileRoute("/_authenticated/a-pagar")({
   head: () => ({
@@ -15,12 +15,10 @@ export const Route = createFileRoute("/_authenticated/a-pagar")({
 
 function APagarPage() {
   return (
-    <div className="space-y-6">
-      <PageHeader title="Contas a pagar" description="Acompanhe as despesas pendentes e suas datas de vencimento." />
-      <EmptyState
-        title="Em construção"
-        description="Esta página será implementada em breve."
-      />
-    </div>
+    <PendingList
+      kind="despesa"
+      title="Contas a pagar"
+      description="Despesas pendentes ordenadas por vencimento. Marque como pago para atualizar os saldos."
+    />
   );
 }

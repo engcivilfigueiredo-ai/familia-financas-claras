@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { EmptyState, PageHeader } from "@/components/shared/states";
+import { PendingList } from "@/components/shared/pending-list";
 
 export const Route = createFileRoute("/_authenticated/a-receber")({
   head: () => ({
@@ -15,12 +15,10 @@ export const Route = createFileRoute("/_authenticated/a-receber")({
 
 function AReceberPage() {
   return (
-    <div className="space-y-6">
-      <PageHeader title="Contas a receber" description="Acompanhe as receitas previstas e ainda não recebidas." />
-      <EmptyState
-        title="Em construção"
-        description="Esta página será implementada em breve."
-      />
-    </div>
+    <PendingList
+      kind="receita"
+      title="Contas a receber"
+      description="Receitas previstas ainda não recebidas. Marque como recebido para atualizar os saldos."
+    />
   );
 }
