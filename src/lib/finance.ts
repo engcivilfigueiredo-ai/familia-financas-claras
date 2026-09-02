@@ -17,6 +17,7 @@ export interface Tx {
   transfer_group_id: string | null;
   installment_id: string | null;
   installment_number: number | null;
+  recurring_id: string | null;
   is_recurring: boolean;
   payment_method: string | null;
   tags: string[] | null;
