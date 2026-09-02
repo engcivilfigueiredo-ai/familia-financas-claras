@@ -508,11 +508,14 @@ export type Database = {
           id: string
           institution: string | null
           invested_amount: number
+          last_quote: number | null
           liquidity: string | null
           maturity_date: string | null
           name: string
           quantity: number | null
+          quote_updated_at: string | null
           status: string
+          ticker: string | null
           type: string
           updated_at: string
           user_id: string
@@ -526,11 +529,14 @@ export type Database = {
           id?: string
           institution?: string | null
           invested_amount?: number
+          last_quote?: number | null
           liquidity?: string | null
           maturity_date?: string | null
           name: string
           quantity?: number | null
+          quote_updated_at?: string | null
           status?: string
+          ticker?: string | null
           type?: string
           updated_at?: string
           user_id: string
@@ -544,11 +550,14 @@ export type Database = {
           id?: string
           institution?: string | null
           invested_amount?: number
+          last_quote?: number | null
           liquidity?: string | null
           maturity_date?: string | null
           name?: string
           quantity?: number | null
+          quote_updated_at?: string | null
           status?: string
+          ticker?: string | null
           type?: string
           updated_at?: string
           user_id?: string
