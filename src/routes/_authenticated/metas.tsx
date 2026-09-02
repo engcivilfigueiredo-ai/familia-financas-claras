@@ -261,7 +261,7 @@ function MetasPage() {
                       : ""}
                   </p>
                 ) : (
-                  <p className="text-xs text-success">Meta alcançada!</p>
+                  <p className="text-xs text-success-foreground">Meta alcançada!</p>
                 )}
                 <Button
                   variant="outline"
