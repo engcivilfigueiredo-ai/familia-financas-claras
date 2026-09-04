@@ -504,6 +504,55 @@ function InvestimentosPage() {
         </DialogContent>
       </Dialog>
 
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+          <div>
+            <CardTitle className="text-base">Dividendos e proventos</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Recebido no total {formatBRL(dividends.total)} · {formatBRL(dividends.year)} em{" "}
+              {new Date().getFullYear()}
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {dividends.list.length === 0 ? (
+            <p className="px-6 pb-6 text-sm text-muted-foreground">
+              Nenhum provento registrado. Use o botão de movimentação em um ativo e escolha
+              dividendo, JCP ou rendimento.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Ativo</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Conta</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {dividends.list.map((m) => (
+                  <TableRow key={m.id}>
+                    <TableCell className="whitespace-nowrap">{formatDateBR(m.date)}</TableCell>
+                    <TableCell>{invName.get(m.investment_id)}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{m.type}</Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {m.account_id ? (accName.get(m.account_id) ?? "-") : "-"}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold text-chart-2">
+                      {formatBRL(Number(m.amount))}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
       <Dialog open={moveOpen} onOpenChange={setMoveOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
