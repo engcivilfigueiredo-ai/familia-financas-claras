@@ -281,14 +281,23 @@ function InvestimentosPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {rows.map((row) => {
-            const profit = Number(row.current_amount) - Number(row.invested_amount);
+            const quote = row.ticker ? quoteMap.get(normalizeTicker(row.ticker)) : undefined;
+            const qty = Number(row.quantity ?? 0);
+            const unit = quote?.price ?? Number(row.last_quote ?? 0);
+            const current =
+              row.ticker && qty > 0 && unit > 0 ? qty * unit : Number(row.current_amount);
+            const profit = current - Number(row.invested_amount);
             const pct =
               Number(row.invested_amount) > 0 ? (profit / Number(row.invested_amount)) * 100 : 0;
+            const dividendTotal = dividendByInvestment.get(row.id) ?? 0;
             return (
               <Card key={row.id}>
                 <CardHeader className="flex flex-row items-start justify-between gap-2 pb-2">
                   <div>
-                    <CardTitle className="text-base">{row.name}</CardTitle>
+                    <CardTitle className="text-base">
+                      {row.ticker ? `${row.ticker} · ` : ""}
+                      {row.name}
+                    </CardTitle>
                     <p className="text-xs text-muted-foreground">
                       {row.institution || "Sem instituição"} · {row.type}
                     </p>
@@ -311,14 +320,24 @@ function InvestimentosPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  <p className="text-2xl font-semibold">{formatBRL(Number(row.current_amount))}</p>
+                  <p className="text-2xl font-semibold">{formatBRL(current)}</p>
                   <p className="text-xs text-muted-foreground">
                     Investido {formatBRL(Number(row.invested_amount))}
                   </p>
+                  {row.ticker && qty > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      {qty.toLocaleString("pt-BR")} cotas · preço médio{" "}
+                      {formatBRL(Number(row.average_price ?? 0))} · cotação {formatBRL(unit)}
+                      {quote ? ` (${formatPercent(quote.changePercent)} hoje)` : ""}
+                    </p>
+                  ) : null}
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={profit >= 0 ? "secondary" : "destructive"}>
                       {formatBRL(profit)} · {formatPercent(pct)}
                     </Badge>
+                    {dividendTotal > 0 ? (
+                      <Badge variant="outline">Proventos {formatBRL(dividendTotal)}</Badge>
+                    ) : null}
                     {row.maturity_date ? (
                       <Badge variant="outline">Vence {formatDateBR(row.maturity_date)}</Badge>
                     ) : null}
