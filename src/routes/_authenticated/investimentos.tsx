@@ -1,6 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { ArrowDownUp, Pencil, Plus, Trash2, TrendingUp } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowDownUp, Pencil, Plus, RefreshCw, Trash2, TrendingUp } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { getQuotes, isQuoted, normalizeTicker } from "@/lib/quotes.functions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
