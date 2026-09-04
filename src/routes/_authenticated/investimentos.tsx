@@ -66,6 +66,11 @@ interface InvestmentRow {
   liquidity: string | null;
   status: string;
   family_member_id: string | null;
+  ticker: string | null;
+  quantity: number | null;
+  average_price: number | null;
+  last_quote: number | null;
+  quote_updated_at: string | null;
 }
 
 interface InvestmentTx {
@@ -92,6 +97,9 @@ const emptyForm = {
   liquidity: "diária",
   status: "ativo",
   family_member_id: NONE,
+  ticker: "",
+  quantity: "",
+  average_price: "",
 };
 
 const emptyMove = {
@@ -124,16 +132,75 @@ function InvestimentosPage() {
     [investments.data, scope],
   );
 
+  const tickers = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of investments.data ?? []) {
+      if (r.ticker) set.add(normalizeTicker(r.ticker));
+    }
+    const formTicker = normalizeTicker(form.ticker);
+    if (open && isQuoted(form.type) && formTicker.length >= 4) set.add(formTicker);
+    return [...set].sort();
+  }, [investments.data, form.ticker, form.type, open]);
+
+  const quotes = useQuery({
+    queryKey: ["quotes", tickers.join(",")],
+    queryFn: () => getQuotes({ data: { tickers } }),
+    enabled: tickers.length > 0,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+    staleTime: 30_000,
+  });
+
+  const quoteMap = useMemo(
+    () => new Map((quotes.data ?? []).map((q) => [q.symbol, q])),
+    [quotes.data],
+  );
+
+  const formLiveQuote = quoteMap.get(normalizeTicker(form.ticker));
+
+  // Mantém o saldo atual dos ativos de renda variável sincronizado com a cotação.
+  useEffect(() => {
+    if (!quotes.data?.length) return;
+    for (const row of investments.data ?? []) {
+      if (!row.ticker) continue;
+      const quote = quoteMap.get(normalizeTicker(row.ticker));
+      const qty = Number(row.quantity ?? 0);
+      if (!quote || qty <= 0) continue;
+      const nextValue = Number((qty * quote.price).toFixed(2));
+      if (
+        Math.abs(nextValue - Number(row.current_amount ?? 0)) < 0.01 &&
+        Math.abs(quote.price - Number(row.last_quote ?? 0)) < 0.0001
+      ) {
+        continue;
+      }
+      void supabase
+        .from("investments")
+        .update({
+          current_amount: nextValue,
+          last_quote: quote.price,
+          quote_updated_at: new Date().toISOString(),
+        })
+        .eq("id", row.id)
+        .then(() => queryClient.invalidateQueries({ queryKey: ["investments"] }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quotes.data]);
+
   const totals = useMemo(() => {
     const invested = rows.reduce((s, r) => s + Number(r.invested_amount), 0);
-    const current = rows.reduce((s, r) => s + Number(r.current_amount), 0);
+    const current = rows.reduce((s, r) => {
+      const quote = r.ticker ? quoteMap.get(normalizeTicker(r.ticker)) : undefined;
+      const qty = Number(r.quantity ?? 0);
+      if (quote && qty > 0) return s + qty * quote.price;
+      return s + Number(r.current_amount);
+    }, 0);
     return {
       invested,
       current,
       profit: current - invested,
       pct: invested > 0 ? ((current - invested) / invested) * 100 : 0,
     };
-  }, [rows]);
+  }, [rows, quoteMap]);
 
   const invName = useMemo(() => new Map(rows.map((r) => [r.id, r.name])), [rows]);
   const accName = useMemo(
@@ -145,6 +212,31 @@ function InvestimentosPage() {
     () => (moves.data ?? []).filter((m) => invName.has(m.investment_id)).slice(0, 15),
     [moves.data, invName],
   );
+
+  const dividends = useMemo(() => {
+    const list = (moves.data ?? []).filter(
+      (m) =>
+        invName.has(m.investment_id) &&
+        ["dividendo", "jcp", "rendimento"].includes(m.type),
+    );
+    const year = String(new Date().getFullYear());
+    return {
+      list: list.slice(0, 20),
+      total: list.reduce((s, m) => s + Number(m.amount), 0),
+      year: list
+        .filter((m) => m.date.startsWith(year))
+        .reduce((s, m) => s + Number(m.amount), 0),
+    };
+  }, [moves.data, invName]);
+
+  const dividendByInvestment = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const m of moves.data ?? []) {
+      if (!["dividendo", "jcp", "rendimento"].includes(m.type)) continue;
+      map.set(m.investment_id, (map.get(m.investment_id) ?? 0) + Number(m.amount));
+    }
+    return map;
+  }, [moves.data]);
 
   function openNew() {
     setForm({ ...emptyForm, family_member_id: scope.memberId ?? NONE });
@@ -164,13 +256,33 @@ function InvestimentosPage() {
       liquidity: row.liquidity ?? "diária",
       status: row.status,
       family_member_id: row.family_member_id ?? NONE,
+      ticker: row.ticker ?? "",
+      quantity: row.quantity != null ? String(row.quantity) : "",
+      average_price: row.average_price != null ? String(row.average_price) : "",
     });
     setOpen(true);
   }
 
   function save() {
     if (!form.name.trim()) return;
-    const invested = parseCurrencyInput(form.invested_amount || "0");
+    const quoted = isQuoted(form.type);
+    const ticker = quoted ? normalizeTicker(form.ticker) : "";
+    const quantity = quoted ? parseCurrencyInput(form.quantity || "0") : 0;
+    const averagePrice = quoted ? parseCurrencyInput(form.average_price || "0") : 0;
+
+    if (quoted && (!ticker || quantity <= 0 || averagePrice <= 0)) {
+      toast.error("Informe código do ativo, quantidade de cotas e preço médio.");
+      return;
+    }
+
+    const liveQuote = quoted ? quoteMap.get(ticker)?.price : undefined;
+    const invested = quoted
+      ? Number((quantity * averagePrice).toFixed(2))
+      : parseCurrencyInput(form.invested_amount || "0");
+    const current = quoted
+      ? Number((quantity * (liveQuote ?? averagePrice)).toFixed(2))
+      : parseCurrencyInput(form.current_amount || String(invested));
+
     upsert.mutate(
       {
         ...(form.id ? { id: form.id } : {}),
@@ -179,11 +291,16 @@ function InvestimentosPage() {
         type: form.type,
         application_date: form.application_date,
         invested_amount: invested,
-        current_amount: parseCurrencyInput(form.current_amount || String(invested)),
+        current_amount: current,
         maturity_date: form.maturity_date || null,
         liquidity: form.liquidity || null,
         status: form.status,
         family_member_id: form.family_member_id === NONE ? null : form.family_member_id,
+        ticker: quoted ? ticker : null,
+        quantity: quoted ? quantity : null,
+        average_price: quoted ? averagePrice : null,
+        last_quote: quoted ? (liveQuote ?? averagePrice) : null,
+        quote_updated_at: quoted && liveQuote ? new Date().toISOString() : null,
       },
       { onSuccess: () => setOpen(false) },
     );
