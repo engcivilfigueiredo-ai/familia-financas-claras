@@ -123,6 +123,7 @@ function InvestimentosPage() {
   const members = useTable<Named>("family_members");
   const upsert = useUpsert("investments", "Investimento salvo");
   const remove = useRemove("investments", "Investimento excluído");
+  const queryClient = useQueryClient();
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
