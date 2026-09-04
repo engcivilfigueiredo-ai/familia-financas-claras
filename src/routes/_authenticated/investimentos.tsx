@@ -349,9 +349,23 @@ function InvestimentosPage() {
         title="Investimentos"
         description="Carteira, aportes, resgates e rendimentos integrados ao fluxo de caixa."
         actions={
-          <Button onClick={openNew}>
-            <Plus className="mr-2 h-4 w-4" /> Novo investimento
-          </Button>
+          <div className="flex gap-2">
+            {tickers.length > 0 ? (
+              <Button
+                variant="outline"
+                onClick={() => quotes.refetch()}
+                disabled={quotes.isFetching}
+              >
+                <RefreshCw
+                  className={`mr-2 h-4 w-4 ${quotes.isFetching ? "animate-spin" : ""}`}
+                />
+                Atualizar cotações
+              </Button>
+            ) : null}
+            <Button onClick={openNew}>
+              <Plus className="mr-2 h-4 w-4" /> Novo investimento
+            </Button>
+          </div>
         }
       />
 
