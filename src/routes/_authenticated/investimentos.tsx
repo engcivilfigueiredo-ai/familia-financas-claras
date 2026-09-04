@@ -407,26 +407,74 @@ function InvestimentosPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="inv-invested">Valor investido</Label>
-              <Input
-                id="inv-invested"
-                value={form.invested_amount}
-                onChange={(e) => setForm({ ...form, invested_amount: e.target.value })}
-                inputMode="decimal"
-                placeholder="0,00"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="inv-current">Saldo atual</Label>
-              <Input
-                id="inv-current"
-                value={form.current_amount}
-                onChange={(e) => setForm({ ...form, current_amount: e.target.value })}
-                inputMode="decimal"
-                placeholder="0,00"
-              />
-            </div>
+            {isQuoted(form.type) ? (
+              <>
+                <div className="grid gap-2">
+                  <Label htmlFor="inv-ticker">Código do ativo</Label>
+                  <Input
+                    id="inv-ticker"
+                    value={form.ticker}
+                    onChange={(e) => setForm({ ...form, ticker: e.target.value.toUpperCase() })}
+                    placeholder="PETR4 / HGLG11"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="inv-qty">Quantidade de cotas</Label>
+                  <Input
+                    id="inv-qty"
+                    value={form.quantity}
+                    onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+                    inputMode="decimal"
+                    placeholder="100"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="inv-avg">Preço médio da cota</Label>
+                  <Input
+                    id="inv-avg"
+                    value={form.average_price}
+                    onChange={(e) => setForm({ ...form, average_price: e.target.value })}
+                    inputMode="decimal"
+                    placeholder="0,00"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Cotação atual</Label>
+                  <div className="flex h-9 items-center rounded-md border bg-muted/40 px-3 text-sm">
+                    {formLiveQuote
+                      ? `${formatBRL(formLiveQuote.price)} (${formatPercent(formLiveQuote.changePercent)})`
+                      : "Informe o código para buscar"}
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground sm:col-span-2">
+                  Valor investido = cotas × preço médio. O saldo atual é calculado com a cotação de
+                  mercado e atualizado automaticamente.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="grid gap-2">
+                  <Label htmlFor="inv-invested">Valor investido</Label>
+                  <Input
+                    id="inv-invested"
+                    value={form.invested_amount}
+                    onChange={(e) => setForm({ ...form, invested_amount: e.target.value })}
+                    inputMode="decimal"
+                    placeholder="0,00"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="inv-current">Saldo atual</Label>
+                  <Input
+                    id="inv-current"
+                    value={form.current_amount}
+                    onChange={(e) => setForm({ ...form, current_amount: e.target.value })}
+                    inputMode="decimal"
+                    placeholder="0,00"
+                  />
+                </div>
+              </>
+            )}
             <div className="grid gap-2">
               <Label htmlFor="inv-date">Aplicação</Label>
               <Input
