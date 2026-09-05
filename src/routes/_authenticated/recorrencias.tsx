@@ -104,6 +104,7 @@ function RecorrenciasPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [generating, setGenerating] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState<string | null>(null);
 
   const rows = useMemo(
     () => (recurring.data ?? []).filter((r) => scope.matches(r.family_member_id)),
