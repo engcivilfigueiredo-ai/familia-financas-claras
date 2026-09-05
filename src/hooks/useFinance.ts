@@ -17,7 +17,8 @@ export type TableName =
   | "liabilities"
   | "budgets"
   | "financial_goals"
-  | "notifications";
+  | "notifications"
+  | "projects";
 
 const ORDER: Partial<Record<TableName, { column: string; ascending: boolean }>> = {
   transactions: { column: "date", ascending: false },
@@ -33,6 +34,7 @@ const ORDER: Partial<Record<TableName, { column: string; ascending: boolean }>> 
   financial_goals: { column: "target_date", ascending: true },
   recurring_transactions: { column: "start_date", ascending: false },
   notifications: { column: "created_at", ascending: false },
+  projects: { column: "project_number", ascending: true },
 };
 
 export function useTable<T = Record<string, unknown>>(table: TableName) {
@@ -74,6 +76,7 @@ export function useInvalidateFinance() {
       "financial_goals",
       "recurring_transactions",
       "notifications",
+      "projects",
     ]) {
       qc.invalidateQueries({ queryKey: [key] });
     }

@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedAPagarRouteImport } from './routes/_authenticated/a-pagar'
 import { Route as AuthenticatedAReceberRouteImport } from './routes/_authenticated/a-receber'
+import { Route as AuthenticatedBfEngenhariaRouteImport } from './routes/_authenticated/bf-engenharia'
 import { Route as AuthenticatedCartoesRouteImport } from './routes/_authenticated/cartoes'
 import { Route as AuthenticatedCategoriasRouteImport } from './routes/_authenticated/categorias'
 import { Route as AuthenticatedConfiguracoesRouteImport } from './routes/_authenticated/configuracoes'
@@ -52,6 +53,12 @@ const AuthenticatedAReceberRoute = AuthenticatedAReceberRouteImport.update({
   path: '/a-receber',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedBfEngenhariaRoute =
+  AuthenticatedBfEngenhariaRouteImport.update({
+    id: '/bf-engenharia',
+    path: '/bf-engenharia',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedCartoesRoute = AuthenticatedCartoesRouteImport.update({
   id: '/cartoes',
   path: '/cartoes',
@@ -127,6 +134,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/a-pagar': typeof AuthenticatedAPagarRoute
   '/a-receber': typeof AuthenticatedAReceberRoute
+  '/bf-engenharia': typeof AuthenticatedBfEngenhariaRoute
   '/cartoes': typeof AuthenticatedCartoesRoute
   '/categorias': typeof AuthenticatedCategoriasRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
@@ -146,6 +154,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/a-pagar': typeof AuthenticatedAPagarRoute
   '/a-receber': typeof AuthenticatedAReceberRoute
+  '/bf-engenharia': typeof AuthenticatedBfEngenhariaRoute
   '/cartoes': typeof AuthenticatedCartoesRoute
   '/categorias': typeof AuthenticatedCategoriasRoute
   '/configuracoes': typeof AuthenticatedConfiguracoesRoute
@@ -167,6 +176,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/a-pagar': typeof AuthenticatedAPagarRoute
   '/_authenticated/a-receber': typeof AuthenticatedAReceberRoute
+  '/_authenticated/bf-engenharia': typeof AuthenticatedBfEngenhariaRoute
   '/_authenticated/cartoes': typeof AuthenticatedCartoesRoute
   '/_authenticated/categorias': typeof AuthenticatedCategoriasRoute
   '/_authenticated/configuracoes': typeof AuthenticatedConfiguracoesRoute
@@ -188,6 +198,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/a-pagar'
     | '/a-receber'
+    | '/bf-engenharia'
     | '/cartoes'
     | '/categorias'
     | '/configuracoes'
@@ -207,6 +218,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/a-pagar'
     | '/a-receber'
+    | '/bf-engenharia'
     | '/cartoes'
     | '/categorias'
     | '/configuracoes'
@@ -227,6 +239,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/a-pagar'
     | '/_authenticated/a-receber'
+    | '/_authenticated/bf-engenharia'
     | '/_authenticated/cartoes'
     | '/_authenticated/categorias'
     | '/_authenticated/configuracoes'
@@ -283,6 +296,13 @@ declare module '@tanstack/react-router' {
       path: '/a-receber'
       fullPath: '/a-receber'
       preLoaderRoute: typeof AuthenticatedAReceberRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/bf-engenharia': {
+      id: '/_authenticated/bf-engenharia'
+      path: '/bf-engenharia'
+      fullPath: '/bf-engenharia'
+      preLoaderRoute: typeof AuthenticatedBfEngenhariaRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/cartoes': {
@@ -382,6 +402,7 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAPagarRoute: typeof AuthenticatedAPagarRoute
   AuthenticatedAReceberRoute: typeof AuthenticatedAReceberRoute
+  AuthenticatedBfEngenhariaRoute: typeof AuthenticatedBfEngenhariaRoute
   AuthenticatedCartoesRoute: typeof AuthenticatedCartoesRoute
   AuthenticatedCategoriasRoute: typeof AuthenticatedCategoriasRoute
   AuthenticatedConfiguracoesRoute: typeof AuthenticatedConfiguracoesRoute
@@ -400,6 +421,7 @@ interface AuthenticatedRouteRouteChildren {
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAPagarRoute: AuthenticatedAPagarRoute,
   AuthenticatedAReceberRoute: AuthenticatedAReceberRoute,
+  AuthenticatedBfEngenhariaRoute: AuthenticatedBfEngenhariaRoute,
   AuthenticatedCartoesRoute: AuthenticatedCartoesRoute,
   AuthenticatedCategoriasRoute: AuthenticatedCategoriasRoute,
   AuthenticatedConfiguracoesRoute: AuthenticatedConfiguracoesRoute,
