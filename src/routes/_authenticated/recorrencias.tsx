@@ -301,6 +301,18 @@ function RecorrenciasPage() {
                         >
                           <Zap className="mr-1 h-4 w-4" /> Gerar
                         </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={refreshing === row.id || !row.is_active}
+                          onClick={() => refresh(row)}
+                          title="Reaplica os dados atuais nos lançamentos futuros pendentes"
+                        >
+                          <RefreshCw
+                            className={`mr-1 h-4 w-4 ${refreshing === row.id ? "animate-spin" : ""}`}
+                          />{" "}
+                          Atualizar
+                        </Button>
                         <Button variant="ghost" size="icon" onClick={() => openEdit(row)}>
                           <Pencil className="h-4 w-4" />
                         </Button>
