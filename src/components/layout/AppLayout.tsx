@@ -21,6 +21,7 @@ import {
   Wallet,
   FileBarChart,
   CalendarClock,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -61,6 +62,7 @@ const NAV = [
   { to: "/orcamento", label: "Orçamento", icon: PiggyBank },
   { to: "/metas", label: "Metas", icon: Target },
   { to: "/relatorios", label: "Relatórios", icon: FileBarChart },
+  { to: "/bf-engenharia", label: "BF Engenharia", icon: Building2 },
   { to: "/categorias", label: "Categorias", icon: Tags },
   { to: "/familia", label: "Família", icon: Users },
   { to: "/configuracoes", label: "Configurações", icon: Settings },
