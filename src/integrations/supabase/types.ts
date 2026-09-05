@@ -729,6 +729,60 @@ export type Database = {
         }
         Relationships: []
       }
+      projects: {
+        Row: {
+          budget_amount: number
+          budget_date: string | null
+          city: string | null
+          closing_date: string | null
+          contract_amount: number
+          created_at: string
+          id: string
+          name: string
+          notes: string | null
+          project_number: string
+          received_amount: number
+          state: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          budget_amount?: number
+          budget_date?: string | null
+          city?: string | null
+          closing_date?: string | null
+          contract_amount?: number
+          created_at?: string
+          id?: string
+          name: string
+          notes?: string | null
+          project_number: string
+          received_amount?: number
+          state?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          budget_amount?: number
+          budget_date?: string | null
+          city?: string | null
+          closing_date?: string | null
+          contract_amount?: number
+          created_at?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          project_number?: string
+          received_amount?: number
+          state?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       recurring_transactions: {
         Row: {
           account_id: string | null
@@ -935,7 +989,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      next_project_number: { Args: never; Returns: string }
     }
     Enums: {
       [_ in never]: never
