@@ -161,23 +161,28 @@ function RecorrenciasPage() {
     );
   }
 
+  function occurrences(row: RecurringRow, skip: Set<string>) {
+    const horizon = addMonths(todayISO(), 3);
+    const dates: string[] = [];
+    let cursor = row.start_date;
+    let guard = 0;
+    while (cursor <= horizon && guard < 200) {
+      if (row.end_date && cursor > row.end_date) break;
+      if (!skip.has(cursor)) dates.push(cursor);
+      cursor = addFrequency(cursor, row.frequency);
+      guard += 1;
+    }
+    return dates;
+  }
+
   /** Rule 7: generate the missing occurrences up to 3 months ahead. */
   async function generate(row: RecurringRow) {
     setGenerating(row.id);
     try {
-      const horizon = addMonths(todayISO(), 3);
       const existing = new Set(
         (transactions.data ?? []).filter((t) => t.recurring_id === row.id).map((t) => t.date),
       );
-      const dates: string[] = [];
-      let cursor = row.start_date;
-      let guard = 0;
-      while (cursor <= horizon && guard < 200) {
-        if (row.end_date && cursor > row.end_date) break;
-        if (!existing.has(cursor)) dates.push(cursor);
-        cursor = addFrequency(cursor, row.frequency);
-        guard += 1;
-      }
+      const dates = occurrences(row, existing);
       if (!dates.length) {
         toast.info("Nenhuma nova ocorrência para gerar.");
         return;
@@ -189,6 +194,28 @@ function RecorrenciasPage() {
       toast.error((error as Error).message);
     } finally {
       setGenerating(null);
+    }
+  }
+
+  /** Reaplica os dados atuais da recorrência nos lançamentos futuros pendentes. */
+  async function refresh(row: RecurringRow) {
+    setRefreshing(row.id);
+    try {
+      const today = todayISO();
+      await deleteFutureRecurringOccurrences(row.id, today);
+      const kept = new Set(
+        (transactions.data ?? [])
+          .filter((t) => t.recurring_id === row.id && !(t.status === "pendente" && t.date >= today))
+          .map((t) => t.date),
+      );
+      const dates = occurrences(row, kept).filter((d) => d >= today);
+      const created = dates.length ? await materializeRecurring(row, dates) : 0;
+      invalidate();
+      toast.success(`Recorrência atualizada: ${created} lançamento(s) futuro(s) ajustado(s).`);
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setRefreshing(null);
     }
   }
 
