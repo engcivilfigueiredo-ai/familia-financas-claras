@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Pencil, Plus, Repeat, Trash2, Zap } from "lucide-react";
+import { Pencil, Plus, RefreshCw, Repeat, Trash2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -33,7 +33,7 @@ import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/s
 import { ConfirmDelete } from "@/components/shared/confirm-delete";
 import { useInvalidateFinance, useRemove, useTable, useUpsert } from "@/hooks/useFinance";
 import { useScope } from "@/hooks/useScope";
-import { materializeRecurring } from "@/lib/transactions";
+import { deleteFutureRecurringOccurrences, materializeRecurring } from "@/lib/transactions";
 import { RECURRENCE_FREQUENCIES, addFrequency, type Tx } from "@/lib/finance";
 import { addMonths, formatBRL, formatDateBR, parseCurrencyInput, todayISO } from "@/lib/format";
 import { toast } from "sonner";
@@ -104,6 +104,7 @@ function RecorrenciasPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [generating, setGenerating] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState<string | null>(null);
 
   const rows = useMemo(
     () => (recurring.data ?? []).filter((r) => scope.matches(r.family_member_id)),
@@ -161,23 +162,28 @@ function RecorrenciasPage() {
     );
   }
 
+  function occurrences(row: RecurringRow, skip: Set<string>) {
+    const horizon = addMonths(todayISO(), 3);
+    const dates: string[] = [];
+    let cursor = row.start_date;
+    let guard = 0;
+    while (cursor <= horizon && guard < 200) {
+      if (row.end_date && cursor > row.end_date) break;
+      if (!skip.has(cursor)) dates.push(cursor);
+      cursor = addFrequency(cursor, row.frequency);
+      guard += 1;
+    }
+    return dates;
+  }
+
   /** Rule 7: generate the missing occurrences up to 3 months ahead. */
   async function generate(row: RecurringRow) {
     setGenerating(row.id);
     try {
-      const horizon = addMonths(todayISO(), 3);
       const existing = new Set(
         (transactions.data ?? []).filter((t) => t.recurring_id === row.id).map((t) => t.date),
       );
-      const dates: string[] = [];
-      let cursor = row.start_date;
-      let guard = 0;
-      while (cursor <= horizon && guard < 200) {
-        if (row.end_date && cursor > row.end_date) break;
-        if (!existing.has(cursor)) dates.push(cursor);
-        cursor = addFrequency(cursor, row.frequency);
-        guard += 1;
-      }
+      const dates = occurrences(row, existing);
       if (!dates.length) {
         toast.info("Nenhuma nova ocorrência para gerar.");
         return;
@@ -189,6 +195,28 @@ function RecorrenciasPage() {
       toast.error((error as Error).message);
     } finally {
       setGenerating(null);
+    }
+  }
+
+  /** Reaplica os dados atuais da recorrência nos lançamentos futuros pendentes. */
+  async function refresh(row: RecurringRow) {
+    setRefreshing(row.id);
+    try {
+      const today = todayISO();
+      await deleteFutureRecurringOccurrences(row.id, today);
+      const kept = new Set(
+        (transactions.data ?? [])
+          .filter((t) => t.recurring_id === row.id && !(t.status === "pendente" && t.date >= today))
+          .map((t) => t.date),
+      );
+      const dates = occurrences(row, kept).filter((d) => d >= today);
+      const created = dates.length ? await materializeRecurring(row, dates) : 0;
+      invalidate();
+      toast.success(`Recorrência atualizada: ${created} lançamento(s) futuro(s) ajustado(s).`);
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setRefreshing(null);
     }
   }
 
@@ -272,6 +300,18 @@ function RecorrenciasPage() {
                           onClick={() => generate(row)}
                         >
                           <Zap className="mr-1 h-4 w-4" /> Gerar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={refreshing === row.id || !row.is_active}
+                          onClick={() => refresh(row)}
+                          title="Reaplica os dados atuais nos lançamentos futuros pendentes"
+                        >
+                          <RefreshCw
+                            className={`mr-1 h-4 w-4 ${refreshing === row.id ? "animate-spin" : ""}`}
+                          />{" "}
+                          Atualizar
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => openEdit(row)}>
                           <Pencil className="h-4 w-4" />

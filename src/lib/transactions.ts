@@ -357,6 +357,20 @@ export async function materializeRecurring(
   return rows.length;
 }
 
+/**
+ * Removes pending future occurrences of a recurring transaction so they can
+ * be regenerated with the updated recurrence data. Past/paid history is kept.
+ */
+export async function deleteFutureRecurringOccurrences(recurringId: string, fromDate: string) {
+  const { error } = await supabase
+    .from("transactions")
+    .delete()
+    .eq("recurring_id", recurringId)
+    .eq("status", "pendente")
+    .gte("date", fromDate);
+  fail(error);
+}
+
 export function nextInvoiceMonthFromToday(closing_day: number): string {
   return invoiceMonthFor(toISO(new Date()), closing_day);
 }
