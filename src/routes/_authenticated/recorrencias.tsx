@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Pencil, Plus, Repeat, Trash2, Zap } from "lucide-react";
+import { Pencil, Plus, RefreshCw, Repeat, Trash2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -33,7 +33,7 @@ import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/s
 import { ConfirmDelete } from "@/components/shared/confirm-delete";
 import { useInvalidateFinance, useRemove, useTable, useUpsert } from "@/hooks/useFinance";
 import { useScope } from "@/hooks/useScope";
-import { materializeRecurring } from "@/lib/transactions";
+import { deleteFutureRecurringOccurrences, materializeRecurring } from "@/lib/transactions";
 import { RECURRENCE_FREQUENCIES, addFrequency, type Tx } from "@/lib/finance";
 import { addMonths, formatBRL, formatDateBR, parseCurrencyInput, todayISO } from "@/lib/format";
 import { toast } from "sonner";
