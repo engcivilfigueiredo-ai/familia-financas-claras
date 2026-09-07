@@ -161,6 +161,8 @@ function InvestimentosPage() {
   const [form, setForm] = useState(emptyForm);
   const [moveOpen, setMoveOpen] = useState(false);
   const [move, setMove] = useState(emptyMove);
+  const [contributionOpen, setContributionOpen] = useState(false);
+  const [contribution, setContribution] = useState(emptyContribution);
   const [saving, setSaving] = useState(false);
 
   const rows = useMemo(
