@@ -502,6 +502,7 @@ export type Database = {
         Row: {
           application_date: string
           average_price: number | null
+          beneficiary: string | null
           created_at: string
           current_amount: number
           family_member_id: string | null
@@ -512,17 +513,21 @@ export type Database = {
           liquidity: string | null
           maturity_date: string | null
           name: string
+          plan_type: string | null
           quantity: number | null
           quote_updated_at: string | null
           status: string
+          tax_regime: string | null
           ticker: string | null
           type: string
           updated_at: string
           user_id: string
+          withhold_ir: boolean | null
         }
         Insert: {
           application_date?: string
           average_price?: number | null
+          beneficiary?: string | null
           created_at?: string
           current_amount?: number
           family_member_id?: string | null
@@ -533,17 +538,21 @@ export type Database = {
           liquidity?: string | null
           maturity_date?: string | null
           name: string
+          plan_type?: string | null
           quantity?: number | null
           quote_updated_at?: string | null
           status?: string
+          tax_regime?: string | null
           ticker?: string | null
           type?: string
           updated_at?: string
           user_id: string
+          withhold_ir?: boolean | null
         }
         Update: {
           application_date?: string
           average_price?: number | null
+          beneficiary?: string | null
           created_at?: string
           current_amount?: number
           family_member_id?: string | null
@@ -554,13 +563,16 @@ export type Database = {
           liquidity?: string | null
           maturity_date?: string | null
           name?: string
+          plan_type?: string | null
           quantity?: number | null
           quote_updated_at?: string | null
           status?: string
+          tax_regime?: string | null
           ticker?: string | null
           type?: string
           updated_at?: string
           user_id?: string
+          withhold_ir?: boolean | null
         }
         Relationships: [
           {
@@ -795,7 +807,9 @@ export type Database = {
           family_member_id: string | null
           frequency: string
           id: string
+          investment_id: string | null
           is_active: boolean
+          is_investment_contribution: boolean | null
           start_date: string
           type: string
           updated_at: string
@@ -812,7 +826,9 @@ export type Database = {
           family_member_id?: string | null
           frequency?: string
           id?: string
+          investment_id?: string | null
           is_active?: boolean
+          is_investment_contribution?: boolean | null
           start_date?: string
           type?: string
           updated_at?: string
@@ -829,7 +845,9 @@ export type Database = {
           family_member_id?: string | null
           frequency?: string
           id?: string
+          investment_id?: string | null
           is_active?: boolean
+          is_investment_contribution?: boolean | null
           start_date?: string
           type?: string
           updated_at?: string
@@ -862,6 +880,13 @@ export type Database = {
             columns: ["family_member_id"]
             isOneToOne: false
             referencedRelation: "family_members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_transactions_investment_id_fkey"
+            columns: ["investment_id"]
+            isOneToOne: false
+            referencedRelation: "investments"
             referencedColumns: ["id"]
           },
         ]
