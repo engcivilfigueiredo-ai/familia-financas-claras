@@ -141,6 +141,8 @@ function RecorrenciasPage() {
       credit_card_id: row.credit_card_id ?? NONE,
       family_member_id: row.family_member_id ?? NONE,
       is_active: row.is_active,
+      investment_id: row.investment_id ?? NONE,
+      is_investment_contribution: row.is_investment_contribution,
     });
     setOpen(true);
   }
@@ -161,6 +163,8 @@ function RecorrenciasPage() {
         credit_card_id: form.credit_card_id === NONE ? null : form.credit_card_id,
         family_member_id: form.family_member_id === NONE ? null : form.family_member_id,
         is_active: form.is_active,
+        investment_id: form.investment_id === NONE ? null : form.investment_id,
+        is_investment_contribution: form.is_investment_contribution,
       },
       { onSuccess: () => setOpen(false) },
     );
