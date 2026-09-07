@@ -297,6 +297,10 @@ function InvestimentosPage() {
       ticker: row.ticker ?? "",
       quantity: row.quantity != null ? String(row.quantity) : "",
       average_price: row.average_price != null ? String(row.average_price) : "",
+      plan_type: row.plan_type ?? NONE,
+      tax_regime: row.tax_regime ?? NONE,
+      withhold_ir: row.withhold_ir ?? false,
+      beneficiary: row.beneficiary ?? "",
     });
     setOpen(true);
   }
@@ -304,12 +308,18 @@ function InvestimentosPage() {
   function save() {
     if (!form.name.trim()) return;
     const quoted = isQuoted(form.type);
+    const isPension = form.type === "previdência";
     const ticker = quoted ? normalizeTicker(form.ticker) : "";
     const quantity = quoted ? parseCurrencyInput(form.quantity || "0") : 0;
     const averagePrice = quoted ? parseCurrencyInput(form.average_price || "0") : 0;
 
     if (quoted && (!ticker || quantity <= 0 || averagePrice <= 0)) {
       toast.error("Informe código do ativo, quantidade de cotas e preço médio.");
+      return;
+    }
+
+    if (isPension && form.plan_type === NONE) {
+      toast.error("Informe o tipo do plano de previdência (PGBL ou VGBL).");
       return;
     }
 
@@ -339,6 +349,10 @@ function InvestimentosPage() {
         average_price: quoted ? averagePrice : null,
         last_quote: quoted ? (liveQuote ?? averagePrice) : null,
         quote_updated_at: quoted && liveQuote ? new Date().toISOString() : null,
+        plan_type: isPension ? form.plan_type : null,
+        tax_regime: isPension ? form.tax_regime || null : null,
+        withhold_ir: isPension ? form.withhold_ir : null,
+        beneficiary: isPension ? form.beneficiary.trim() || null : null,
       },
       { onSuccess: () => setOpen(false) },
     );
