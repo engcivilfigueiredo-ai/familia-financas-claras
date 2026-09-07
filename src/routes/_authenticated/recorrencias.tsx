@@ -89,6 +89,8 @@ const emptyForm = {
   credit_card_id: NONE,
   family_member_id: NONE,
   is_active: true,
+  investment_id: NONE,
+  is_investment_contribution: false,
 };
 
 function RecorrenciasPage() {
