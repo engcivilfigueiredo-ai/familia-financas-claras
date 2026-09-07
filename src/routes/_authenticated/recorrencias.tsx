@@ -196,7 +196,10 @@ function RecorrenciasPage() {
         toast.info("Nenhuma nova ocorrência para gerar.");
         return;
       }
-      const created = await materializeRecurring(row, dates);
+      const created = await materializeRecurring(
+        { ...row, investment_name: row.description },
+        dates,
+      );
       invalidate();
       toast.success(`${created} lançamento(s) gerado(s).`);
     } catch (error) {
@@ -218,7 +221,9 @@ function RecorrenciasPage() {
           .map((t) => t.date),
       );
       const dates = occurrences(row, kept).filter((d) => d >= today);
-      const created = dates.length ? await materializeRecurring(row, dates) : 0;
+      const created = dates.length
+        ? await materializeRecurring({ ...row, investment_name: row.description }, dates)
+        : 0;
       invalidate();
       toast.success(`Recorrência atualizada: ${created} lançamento(s) futuro(s) ajustado(s).`);
     } catch (error) {
