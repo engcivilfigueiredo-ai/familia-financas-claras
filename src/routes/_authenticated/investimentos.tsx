@@ -358,6 +358,75 @@ function InvestimentosPage() {
     );
   }
 
+  function openContribution(row: InvestmentRow) {
+    setContribution({
+      ...emptyContribution,
+      investment_id: row.id,
+      account_id: NONE,
+    });
+    setContributionOpen(true);
+  }
+
+  async function saveContribution() {
+    const amount = parseCurrencyInput(contribution.amount);
+    if (!contribution.investment_id || amount <= 0) {
+      toast.error("Informe um valor válido.");
+      return;
+    }
+    const row = rows.find((r) => r.id === contribution.investment_id);
+    if (!row) {
+      toast.error("Investimento não encontrado.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const { data, error } = await supabase
+        .from("recurring_transactions")
+        .insert({
+          user_id: await supabase.auth.getUser().then(({ data }) => data.user?.id ?? ""),
+          description: `Aporte ${row.name}`,
+          amount,
+          type: "despesa",
+          frequency: contribution.frequency,
+          start_date: contribution.start_date,
+          end_date: contribution.end_date || null,
+          account_id: contribution.account_id === NONE ? null : contribution.account_id,
+          family_member_id: row.family_member_id,
+          investment_id: row.id,
+          is_investment_contribution: true,
+          is_active: true,
+        })
+        .select("id")
+        .single();
+      fail(error);
+
+      const recurring = {
+        id: data?.id ?? "",
+        description: `Aporte ${row.name}`,
+        amount,
+        type: "despesa",
+        frequency: contribution.frequency,
+        start_date: contribution.start_date,
+        end_date: contribution.end_date || null,
+        category_id: null,
+        account_id: contribution.account_id === NONE ? null : contribution.account_id,
+        credit_card_id: null,
+        family_member_id: row.family_member_id,
+        investment_id: row.id,
+        is_investment_contribution: true,
+        investment_name: row.name,
+      };
+      const created = await materializeRecurring(recurring, [contribution.start_date]);
+      invalidate();
+      toast.success(`Aporte recorrente criado: ${created} ocorrência(s) gerada(s).`);
+      setContributionOpen(false);
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function openMove(row: InvestmentRow) {
     setMove({ ...emptyMove, investment_id: row.id });
     setMoveOpen(true);
