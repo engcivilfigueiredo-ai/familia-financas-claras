@@ -1,12 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDownUp, Pencil, Plus, RefreshCw, Trash2, TrendingUp } from "lucide-react";
+import {
+  ArrowDownUp,
+  Pencil,
+  PiggyBank,
+  Plus,
+  RefreshCw,
+  Trash2,
+  TrendingUp,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getQuotes, isQuoted, normalizeTicker } from "@/lib/quotes.functions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -35,8 +44,14 @@ import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/s
 import { ConfirmDelete } from "@/components/shared/confirm-delete";
 import { useInvalidateFinance, useRemove, useTable, useUpsert } from "@/hooks/useFinance";
 import { useScope } from "@/hooks/useScope";
-import { createInvestmentMove } from "@/lib/transactions";
-import { INVESTMENT_TX_TYPES, INVESTMENT_TYPES, IR_TYPES } from "@/lib/finance";
+import { createInvestmentMove, materializeRecurring } from "@/lib/transactions";
+import {
+  INVESTMENT_TX_TYPES,
+  INVESTMENT_TYPES,
+  IR_TYPES,
+  PENSION_PLAN_TYPES,
+  TAX_REGIMES,
+} from "@/lib/finance";
 import { formatBRL, formatDateBR, formatPercent, parseCurrencyInput, todayISO } from "@/lib/format";
 import { toast } from "sonner";
 
