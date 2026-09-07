@@ -89,6 +89,10 @@ interface InvestmentRow {
   average_price: number | null;
   last_quote: number | null;
   quote_updated_at: string | null;
+  plan_type: string | null;
+  tax_regime: string | null;
+  withhold_ir: boolean | null;
+  beneficiary: string | null;
 }
 
 interface InvestmentTx {
@@ -118,6 +122,10 @@ const emptyForm = {
   ticker: "",
   quantity: "",
   average_price: "",
+  plan_type: NONE,
+  tax_regime: NONE,
+  withhold_ir: false,
+  beneficiary: "",
 };
 
 const emptyMove = {
@@ -127,6 +135,15 @@ const emptyMove = {
   amount: "",
   date: todayISO(),
   ir_type: NONE,
+};
+
+const emptyContribution = {
+  investment_id: "",
+  amount: "",
+  start_date: todayISO(),
+  end_date: "",
+  frequency: "mensal",
+  account_id: NONE,
 };
 
 function InvestimentosPage() {
