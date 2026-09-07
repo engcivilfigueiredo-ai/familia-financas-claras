@@ -70,6 +70,8 @@ interface RecurringRow {
   credit_card_id: string | null;
   family_member_id: string | null;
   is_active: boolean;
+  investment_id: string | null;
+  is_investment_contribution: boolean;
 }
 
 const NONE = "__none__";
