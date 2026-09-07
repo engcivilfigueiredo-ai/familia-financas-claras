@@ -281,11 +281,19 @@ function RecorrenciasPage() {
                 {rows.map((row) => (
                   <TableRow key={row.id} className={row.is_active ? "" : "opacity-60"}>
                     <TableCell className="font-medium">
-                      {row.description}
+                      <div className="flex items-center gap-2">
+                        {row.is_investment_contribution ? (
+                          <PiggyBank className="h-4 w-4 text-chart-2" />
+                        ) : null}
+                        {row.description}
+                      </div>
                       <div className="flex gap-1 pt-1">
                         <Badge variant={row.type === "receita" ? "secondary" : "outline"}>
                           {row.type}
                         </Badge>
+                        {row.is_investment_contribution ? (
+                          <Badge variant="secondary">Aporte previdência</Badge>
+                        ) : null}
                         {row.is_active ? null : <Badge variant="secondary">Inativa</Badge>}
                       </div>
                     </TableCell>
