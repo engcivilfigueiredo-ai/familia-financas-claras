@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Pencil, Plus, RefreshCw, Repeat, Trash2, Zap } from "lucide-react";
+import { Pencil, PiggyBank, Plus, RefreshCw, Repeat, Trash2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -70,6 +70,8 @@ interface RecurringRow {
   credit_card_id: string | null;
   family_member_id: string | null;
   is_active: boolean;
+  investment_id: string | null;
+  is_investment_contribution: boolean;
 }
 
 const NONE = "__none__";
@@ -87,6 +89,8 @@ const emptyForm = {
   credit_card_id: NONE,
   family_member_id: NONE,
   is_active: true,
+  investment_id: NONE,
+  is_investment_contribution: false,
 };
 
 function RecorrenciasPage() {
@@ -137,6 +141,8 @@ function RecorrenciasPage() {
       credit_card_id: row.credit_card_id ?? NONE,
       family_member_id: row.family_member_id ?? NONE,
       is_active: row.is_active,
+      investment_id: row.investment_id ?? NONE,
+      is_investment_contribution: row.is_investment_contribution,
     });
     setOpen(true);
   }
@@ -157,6 +163,8 @@ function RecorrenciasPage() {
         credit_card_id: form.credit_card_id === NONE ? null : form.credit_card_id,
         family_member_id: form.family_member_id === NONE ? null : form.family_member_id,
         is_active: form.is_active,
+        investment_id: form.investment_id === NONE ? null : form.investment_id,
+        is_investment_contribution: form.is_investment_contribution,
       },
       { onSuccess: () => setOpen(false) },
     );
@@ -188,7 +196,10 @@ function RecorrenciasPage() {
         toast.info("Nenhuma nova ocorrência para gerar.");
         return;
       }
-      const created = await materializeRecurring(row, dates);
+      const created = await materializeRecurring(
+        { ...row, investment_name: row.description },
+        dates,
+      );
       invalidate();
       toast.success(`${created} lançamento(s) gerado(s).`);
     } catch (error) {
@@ -210,7 +221,9 @@ function RecorrenciasPage() {
           .map((t) => t.date),
       );
       const dates = occurrences(row, kept).filter((d) => d >= today);
-      const created = dates.length ? await materializeRecurring(row, dates) : 0;
+      const created = dates.length
+        ? await materializeRecurring({ ...row, investment_name: row.description }, dates)
+        : 0;
       invalidate();
       toast.success(`Recorrência atualizada: ${created} lançamento(s) futuro(s) ajustado(s).`);
     } catch (error) {
@@ -268,11 +281,19 @@ function RecorrenciasPage() {
                 {rows.map((row) => (
                   <TableRow key={row.id} className={row.is_active ? "" : "opacity-60"}>
                     <TableCell className="font-medium">
-                      {row.description}
+                      <div className="flex items-center gap-2">
+                        {row.is_investment_contribution ? (
+                          <PiggyBank className="h-4 w-4 text-chart-2" />
+                        ) : null}
+                        {row.description}
+                      </div>
                       <div className="flex gap-1 pt-1">
                         <Badge variant={row.type === "receita" ? "secondary" : "outline"}>
                           {row.type}
                         </Badge>
+                        {row.is_investment_contribution ? (
+                          <Badge variant="secondary">Aporte previdência</Badge>
+                        ) : null}
                         {row.is_active ? null : <Badge variant="secondary">Inativa</Badge>}
                       </div>
                     </TableCell>

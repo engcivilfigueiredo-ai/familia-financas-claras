@@ -1,12 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowDownUp, Pencil, Plus, RefreshCw, Trash2, TrendingUp } from "lucide-react";
+import {
+  ArrowDownUp,
+  Pencil,
+  PiggyBank,
+  Plus,
+  RefreshCw,
+  Trash2,
+  TrendingUp,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getQuotes, isQuoted, normalizeTicker } from "@/lib/quotes.functions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -35,8 +44,14 @@ import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/s
 import { ConfirmDelete } from "@/components/shared/confirm-delete";
 import { useInvalidateFinance, useRemove, useTable, useUpsert } from "@/hooks/useFinance";
 import { useScope } from "@/hooks/useScope";
-import { createInvestmentMove } from "@/lib/transactions";
-import { INVESTMENT_TX_TYPES, INVESTMENT_TYPES, IR_TYPES } from "@/lib/finance";
+import { createInvestmentMove, materializeRecurring } from "@/lib/transactions";
+import {
+  INVESTMENT_TX_TYPES,
+  INVESTMENT_TYPES,
+  IR_TYPES,
+  PENSION_PLAN_TYPES,
+  TAX_REGIMES,
+} from "@/lib/finance";
 import { formatBRL, formatDateBR, formatPercent, parseCurrencyInput, todayISO } from "@/lib/format";
 import { toast } from "sonner";
 
@@ -74,6 +89,10 @@ interface InvestmentRow {
   average_price: number | null;
   last_quote: number | null;
   quote_updated_at: string | null;
+  plan_type: string | null;
+  tax_regime: string | null;
+  withhold_ir: boolean | null;
+  beneficiary: string | null;
 }
 
 interface InvestmentTx {
@@ -103,6 +122,10 @@ const emptyForm = {
   ticker: "",
   quantity: "",
   average_price: "",
+  plan_type: NONE,
+  tax_regime: NONE,
+  withhold_ir: false,
+  beneficiary: "",
 };
 
 const emptyMove = {
@@ -112,6 +135,15 @@ const emptyMove = {
   amount: "",
   date: todayISO(),
   ir_type: NONE,
+};
+
+const emptyContribution = {
+  investment_id: "",
+  amount: "",
+  start_date: todayISO(),
+  end_date: "",
+  frequency: "mensal",
+  account_id: NONE,
 };
 
 function InvestimentosPage() {
@@ -129,6 +161,8 @@ function InvestimentosPage() {
   const [form, setForm] = useState(emptyForm);
   const [moveOpen, setMoveOpen] = useState(false);
   const [move, setMove] = useState(emptyMove);
+  const [contributionOpen, setContributionOpen] = useState(false);
+  const [contribution, setContribution] = useState(emptyContribution);
   const [saving, setSaving] = useState(false);
 
   const rows = useMemo(
@@ -263,6 +297,10 @@ function InvestimentosPage() {
       ticker: row.ticker ?? "",
       quantity: row.quantity != null ? String(row.quantity) : "",
       average_price: row.average_price != null ? String(row.average_price) : "",
+      plan_type: row.plan_type ?? NONE,
+      tax_regime: row.tax_regime ?? NONE,
+      withhold_ir: row.withhold_ir ?? false,
+      beneficiary: row.beneficiary ?? "",
     });
     setOpen(true);
   }
@@ -270,12 +308,18 @@ function InvestimentosPage() {
   function save() {
     if (!form.name.trim()) return;
     const quoted = isQuoted(form.type);
+    const isPension = form.type === "previdência";
     const ticker = quoted ? normalizeTicker(form.ticker) : "";
     const quantity = quoted ? parseCurrencyInput(form.quantity || "0") : 0;
     const averagePrice = quoted ? parseCurrencyInput(form.average_price || "0") : 0;
 
     if (quoted && (!ticker || quantity <= 0 || averagePrice <= 0)) {
       toast.error("Informe código do ativo, quantidade de cotas e preço médio.");
+      return;
+    }
+
+    if (isPension && form.plan_type === NONE) {
+      toast.error("Informe o tipo do plano de previdência (PGBL ou VGBL).");
       return;
     }
 
@@ -305,9 +349,82 @@ function InvestimentosPage() {
         average_price: quoted ? averagePrice : null,
         last_quote: quoted ? (liveQuote ?? averagePrice) : null,
         quote_updated_at: quoted && liveQuote ? new Date().toISOString() : null,
+        plan_type: isPension ? form.plan_type : null,
+        tax_regime: isPension ? form.tax_regime || null : null,
+        withhold_ir: isPension ? form.withhold_ir : null,
+        beneficiary: isPension ? form.beneficiary.trim() || null : null,
       },
       { onSuccess: () => setOpen(false) },
     );
+  }
+
+  function openContribution(row: InvestmentRow) {
+    setContribution({
+      ...emptyContribution,
+      investment_id: row.id,
+      account_id: NONE,
+    });
+    setContributionOpen(true);
+  }
+
+  async function saveContribution() {
+    const amount = parseCurrencyInput(contribution.amount);
+    if (!contribution.investment_id || amount <= 0) {
+      toast.error("Informe um valor válido.");
+      return;
+    }
+    const row = rows.find((r) => r.id === contribution.investment_id);
+    if (!row) {
+      toast.error("Investimento não encontrado.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const { data, error } = await supabase
+        .from("recurring_transactions")
+        .insert({
+          user_id: await supabase.auth.getUser().then(({ data }) => data.user?.id ?? ""),
+          description: `Aporte ${row.name}`,
+          amount,
+          type: "despesa",
+          frequency: contribution.frequency,
+          start_date: contribution.start_date,
+          end_date: contribution.end_date || null,
+          account_id: contribution.account_id === NONE ? null : contribution.account_id,
+          family_member_id: row.family_member_id,
+          investment_id: row.id,
+          is_investment_contribution: true,
+          is_active: true,
+        })
+        .select("id")
+        .single();
+      fail(error);
+
+      const recurring = {
+        id: data?.id ?? "",
+        description: `Aporte ${row.name}`,
+        amount,
+        type: "despesa",
+        frequency: contribution.frequency,
+        start_date: contribution.start_date,
+        end_date: contribution.end_date || null,
+        category_id: null,
+        account_id: contribution.account_id === NONE ? null : contribution.account_id,
+        credit_card_id: null,
+        family_member_id: row.family_member_id,
+        investment_id: row.id,
+        is_investment_contribution: true,
+        investment_name: row.name,
+      };
+      const created = await materializeRecurring(recurring, [contribution.start_date]);
+      invalidate();
+      toast.success(`Aporte recorrente criado: ${created} ocorrência(s) gerada(s).`);
+      setContributionOpen(false);
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   function openMove(row: InvestmentRow) {

@@ -236,6 +236,10 @@ export const INVESTMENT_TYPES = [
   "outros",
 ] as const;
 
+export const PENSION_PLAN_TYPES = ["PGBL", "VGBL"] as const;
+
+export const TAX_REGIMES = ["progressivo", "regressivo"] as const;
+
 export const INVESTMENT_TX_TYPES = [
   "aplicação",
   "resgate",

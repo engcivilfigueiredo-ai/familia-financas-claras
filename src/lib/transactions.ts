@@ -219,11 +219,7 @@ export interface InvestmentMoveInput {
   investment_name: string;
 }
 
-/**
- * Rules 5 & 6: contributions/redemptions move money between account and
- * investment (transfer legs). Yields, dividends and JCP are income.
- */
-export async function createInvestmentMove(input: InvestmentMoveInput) {
+async function executeInvestmentMove(input: InvestmentMoveInput) {
   const user_id = await uid();
   const amount = Math.abs(input.amount);
 
@@ -318,23 +314,49 @@ export async function createInvestmentMove(input: InvestmentMoveInput) {
   fail(updError);
 }
 
+/**
+ * Rules 5 & 6: contributions/redemptions move money between account and
+ * investment (transfer legs). Yields, dividends and JCP are income.
+ */
+export async function createInvestmentMove(input: InvestmentMoveInput) {
+  return executeInvestmentMove(input);
+}
+
+export interface RecurringForMaterialize {
+  id: string;
+  description: string;
+  amount: number;
+  type: string;
+  frequency: string;
+  start_date: string;
+  end_date: string | null;
+  category_id: string | null;
+  account_id: string | null;
+  credit_card_id: string | null;
+  family_member_id: string | null;
+  investment_id?: string | null;
+  is_investment_contribution?: boolean;
+  investment_name?: string | null;
+}
+
 /** Rule 7 helper: generates recurring transactions up to a horizon. */
-export async function materializeRecurring(
-  recurring: {
-    id: string;
-    description: string;
-    amount: number;
-    type: string;
-    frequency: string;
-    start_date: string;
-    end_date: string | null;
-    category_id: string | null;
-    account_id: string | null;
-    credit_card_id: string | null;
-    family_member_id: string | null;
-  },
-  dates: string[],
-) {
+export async function materializeRecurring(recurring: RecurringForMaterialize, dates: string[]) {
+  if (recurring.is_investment_contribution && recurring.investment_id) {
+    for (const date of dates) {
+      await executeInvestmentMove({
+        investment_id: recurring.investment_id,
+        account_id: recurring.account_id,
+        amount: recurring.amount,
+        date,
+        type: "aplicação",
+        ir_type: null,
+        family_member_id: recurring.family_member_id,
+        investment_name: recurring.investment_name ?? recurring.description,
+      });
+    }
+    return dates.length;
+  }
+
   const user_id = await uid();
   const rows = dates.map((date) => ({
     user_id,
