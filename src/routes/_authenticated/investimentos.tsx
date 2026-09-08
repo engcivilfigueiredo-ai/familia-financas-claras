@@ -803,6 +803,67 @@ function InvestimentosPage() {
                 </SelectContent>
               </Select>
             </div>
+            {form.type === "previdência" ? (
+              <>
+                <div className="grid gap-2">
+                  <Label>Tipo do plano</Label>
+                  <Select
+                    value={form.plan_type}
+                    onValueChange={(v) => setForm({ ...form, plan_type: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE}>Selecione</SelectItem>
+                      {PENSION_PLAN_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label>Regime de tributação</Label>
+                  <Select
+                    value={form.tax_regime}
+                    onValueChange={(v) => setForm({ ...form, tax_regime: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE}>Não informado</SelectItem>
+                      {TAX_REGIMES.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="inv-beneficiary">Beneficiário</Label>
+                  <Input
+                    id="inv-beneficiary"
+                    value={form.beneficiary}
+                    onChange={(e) => setForm({ ...form, beneficiary: e.target.value })}
+                    placeholder="Nome do beneficiário"
+                  />
+                </div>
+                <div className="flex items-center gap-2 py-2">
+                  <Checkbox
+                    id="inv-withhold"
+                    checked={form.withhold_ir}
+                    onCheckedChange={(v) => setForm({ ...form, withhold_ir: Boolean(v) })}
+                  />
+                  <Label htmlFor="inv-withhold" className="cursor-pointer">
+                    Retém IR na fonte
+                  </Label>
+                </div>
+              </>
+            ) : null}
             <div className="grid gap-2 sm:col-span-2">
               <Label>Pessoa</Label>
               <Select
