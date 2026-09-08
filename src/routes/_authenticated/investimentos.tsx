@@ -381,10 +381,14 @@ function InvestimentosPage() {
     }
     setSaving(true);
     try {
+      const { data: userData } = await supabase.auth.getUser();
+      const user_id = userData.user?.id;
+      if (!user_id) throw new Error("Sessão expirada. Faça login novamente.");
+
       const { data, error } = await supabase
         .from("recurring_transactions")
         .insert({
-          user_id: await supabase.auth.getUser().then(({ data }) => data.user?.id ?? ""),
+          user_id,
           description: `Aporte ${row.name}`,
           amount,
           type: "despesa",
@@ -399,7 +403,7 @@ function InvestimentosPage() {
         })
         .select("id")
         .single();
-      fail(error);
+      if (error) throw new Error(error.message);
 
       const recurring = {
         id: data?.id ?? "",
