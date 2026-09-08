@@ -102,6 +102,7 @@ function RecorrenciasPage() {
   const cards = useTable<Named>("credit_cards");
   const categories = useTable<Named>("categories");
   const members = useTable<Named>("family_members");
+  const investments = useTable<Named>("investments");
   const upsert = useUpsert("recurring_transactions", "Recorrência salva");
   const remove = useRemove("recurring_transactions", "Recorrência excluída");
 
@@ -515,6 +516,45 @@ function RecorrenciasPage() {
                 onCheckedChange={(v) => setForm({ ...form, is_active: v })}
               />
             </div>
+            <div className="flex items-center justify-between rounded-lg border p-3 sm:col-span-2">
+              <Label htmlFor="rec-contribution">Aporte em previdência</Label>
+              <Switch
+                id="rec-contribution"
+                checked={form.is_investment_contribution}
+                onCheckedChange={(v) =>
+                  setForm({
+                    ...form,
+                    is_investment_contribution: Boolean(v),
+                    investment_id: v ? form.investment_id : NONE,
+                    type: v ? "despesa" : form.type,
+                    category_id: v ? NONE : form.category_id,
+                  })
+                }
+              />
+            </div>
+            {form.is_investment_contribution ? (
+              <div className="grid gap-2 sm:col-span-2">
+                <Label>Previdência</Label>
+                <Select
+                  value={form.investment_id}
+                  onValueChange={(v) => setForm({ ...form, investment_id: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o investimento" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>Selecione</SelectItem>
+                    {(investments.data ?? [])
+                      .filter((i) => i.type === "previdência")
+                      .map((i) => (
+                        <SelectItem key={i.id} value={i.id}>
+                          {i.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>
