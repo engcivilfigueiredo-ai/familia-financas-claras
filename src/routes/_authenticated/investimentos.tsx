@@ -555,6 +555,11 @@ function InvestimentosPage() {
                     </p>
                   </div>
                   <div className="flex gap-1">
+                    {row.type === "previdência" ? (
+                      <Button variant="ghost" size="icon" onClick={() => openContribution(row)}>
+                        <PiggyBank className="h-4 w-4" />
+                      </Button>
+                    ) : null}
                     <Button variant="ghost" size="icon" onClick={() => openMove(row)}>
                       <ArrowDownUp className="h-4 w-4" />
                     </Button>
