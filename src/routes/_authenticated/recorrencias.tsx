@@ -102,6 +102,7 @@ function RecorrenciasPage() {
   const cards = useTable<Named>("credit_cards");
   const categories = useTable<Named>("categories");
   const members = useTable<Named>("family_members");
+  const investments = useTable<Named>("investments");
   const upsert = useUpsert("recurring_transactions", "Recorrência salva");
   const remove = useRemove("recurring_transactions", "Recorrência excluída");
 
