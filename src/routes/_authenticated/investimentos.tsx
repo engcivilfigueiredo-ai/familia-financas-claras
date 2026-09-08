@@ -599,6 +599,12 @@ function InvestimentosPage() {
                       <Badge variant="outline">Vence {formatDateBR(row.maturity_date)}</Badge>
                     ) : null}
                     {row.status !== "ativo" ? <Badge variant="outline">{row.status}</Badge> : null}
+                    {row.type === "previdência" && row.plan_type ? (
+                      <Badge variant="secondary">
+                        {row.plan_type} · {row.tax_regime || "IR"}
+                        {row.withhold_ir ? " · retido na fonte" : ""}
+                      </Badge>
+                    ) : null}
                   </div>
                 </CardContent>
               </Card>
