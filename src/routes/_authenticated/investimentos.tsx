@@ -50,6 +50,7 @@ import {
   INVESTMENT_TYPES,
   IR_TYPES,
   PENSION_PLAN_TYPES,
+  RECURRENCE_FREQUENCIES,
   TAX_REGIMES,
 } from "@/lib/finance";
 import { formatBRL, formatDateBR, formatPercent, parseCurrencyInput, todayISO } from "@/lib/format";
