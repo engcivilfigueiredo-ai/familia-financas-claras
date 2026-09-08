@@ -1039,6 +1039,135 @@ function InvestimentosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={contributionOpen} onOpenChange={setContributionOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Aporte recorrente em previdência</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="ct-amount">Valor do aporte</Label>
+              <Input
+                id="ct-amount"
+                value={contribution.amount}
+                onChange={(e) => setContribution({ ...contribution, amount: e.target.value })}
+                inputMode="decimal"
+                placeholder="0,00"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Periodicidade</Label>
+              <Select
+                value={contribution.frequency}
+                onValueChange={(v) => setContribution({ ...contribution, frequency: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {RECURRENCE_FREQUENCIES.map((f) => (
+                    <SelectItem key={f} value={f}>
+                      {f}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ct-start">Primeiro aporte</Label>
+              <Input
+                id="ct-start"
+                type="date"
+                value={contribution.start_date}
+                onChange={(e) => setContribution({ ...contribution, start_date: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ct-end">Último aporte (opcional)</Label>
+              <Input
+                id="ct-end"
+                type="date"
+                value={contribution.end_date}
+                onChange={(e) => setContribution({ ...contribution, end_date: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Conta de saída (opcional)</Label>
+              <Select
+                value={contribution.account_id}
+                onValueChange={(v) => setContribution({ ...contribution, account_id: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sem conta" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>Sem conta</SelectItem>
+                  {(accounts.data ?? []).map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Será criada uma recorrência do tipo "Aporte previdência". Cada ocorrência gera uma
+              aplicação no investimento e, se houver conta, uma saída correspondente no fluxo de
+              caixa.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setContributionOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={saveContribution} disabled={saving}>
+              Criar recorrência
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Tabela regressiva de IR em previdência</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Referência para resgate. O app não calcula o IR devido no resgate.
+          </p>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Tempo de acumulação</TableHead>
+                <TableHead className="text-right">Alíquota</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell>Até 2 anos</TableCell>
+                <TableCell className="text-right font-semibold">35%</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell>De 2 a 4 anos</TableCell>
+                <TableCell className="text-right font-semibold">30%</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell>De 4 a 6 anos</TableCell>
+                <TableCell className="text-right font-semibold">25%</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell>De 6 a 8 anos</TableCell>
+                <TableCell className="text-right font-semibold">20%</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell>Acima de 8 anos</TableCell>
+                <TableCell className="text-right font-semibold">15%</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }
