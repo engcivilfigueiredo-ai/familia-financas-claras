@@ -48,6 +48,7 @@ export interface SimpleTxInput {
   status: string;
   notes: string | null;
   tags: string[];
+  project_id?: string | null;
 }
 
 /** Rule 2: card expenses are attached to the matching invoice month. */
@@ -72,6 +73,7 @@ export async function saveSimpleTransaction(input: SimpleTxInput, card?: CardMet
     notes: input.notes,
     tags: input.tags,
     invoice_month,
+    project_id: input.project_id ?? null,
   };
 
   if (input.id) {
