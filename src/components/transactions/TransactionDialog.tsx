@@ -181,7 +181,7 @@ export function TransactionDialog({
       setMoveType("aplicação");
       setIrType(NONE);
     }
-  }, [open, editing, initialKind, scope.view, scope.memberId]);
+  }, [open, editing, initialKind, initialProjectId, scope.view, scope.memberId]);
 
   const filteredCategories = useMemo(
     () =>
