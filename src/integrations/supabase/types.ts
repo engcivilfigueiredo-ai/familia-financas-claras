@@ -908,6 +908,7 @@ export type Database = {
           is_recurring: boolean
           notes: string | null
           payment_method: string | null
+          project_id: string | null
           recurring_id: string | null
           status: string
           tags: string[]
@@ -932,6 +933,7 @@ export type Database = {
           is_recurring?: boolean
           notes?: string | null
           payment_method?: string | null
+          project_id?: string | null
           recurring_id?: string | null
           status?: string
           tags?: string[]
@@ -956,6 +958,7 @@ export type Database = {
           is_recurring?: boolean
           notes?: string | null
           payment_method?: string | null
+          project_id?: string | null
           recurring_id?: string | null
           status?: string
           tags?: string[]
@@ -998,6 +1001,13 @@ export type Database = {
             columns: ["installment_id"]
             isOneToOne: false
             referencedRelation: "installments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
           {
