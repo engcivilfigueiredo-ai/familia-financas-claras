@@ -300,6 +300,24 @@ export type Database = {
           },
         ]
       }
+      cron_config: {
+        Row: {
+          created_at: string
+          name: string
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          name: string
+          token?: string
+        }
+        Update: {
+          created_at?: string
+          name?: string
+          token?: string
+        }
+        Relationships: []
+      }
       family_members: {
         Row: {
           avatar_url: string | null
