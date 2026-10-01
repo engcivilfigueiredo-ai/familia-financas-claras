@@ -336,6 +336,7 @@ function TransactionsPage() {
                                 payment_method: t.payment_method,
                                 status: t.status,
                                 notes: t.notes,
+                                project_id: (t as { project_id?: string | null }).project_id ?? null,
                                 tags: t.tags,
                               });
                               setDialogOpen(true);

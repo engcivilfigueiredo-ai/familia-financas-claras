@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Building2, Pencil, Plus, Trash2 } from "lucide-react";
+import { Building2, HandCoins, Pencil, Plus, Trash2 } from "lucide-react";
+import { TransactionDialog } from "@/components/transactions/TransactionDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -121,6 +122,7 @@ function BfEngenhariaPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [receiveProject, setReceiveProject] = useState<string | null>(null);
 
   const rows = useMemo(() => {
     const list = projects.data ?? [];
@@ -324,6 +326,15 @@ function BfEngenhariaPage() {
                       <TableCell className="text-right">{formatBRL(balance)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Registrar recebimento"
+                            aria-label="Registrar recebimento"
+                            onClick={() => setReceiveProject(row.id)}
+                          >
+                            <HandCoins className="h-4 w-4 text-primary" />
+                          </Button>
                           <Button variant="ghost" size="icon" onClick={() => openEdit(row)}>
                             <Pencil className="h-4 w-4" />
                           </Button>
@@ -345,6 +356,15 @@ function BfEngenhariaPage() {
           </CardContent>
         </Card>
       )}
+
+      <TransactionDialog
+        open={receiveProject !== null}
+        onOpenChange={(o) => {
+          if (!o) setReceiveProject(null);
+        }}
+        initialKind="receita"
+        initialProjectId={receiveProject}
+      />
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl">

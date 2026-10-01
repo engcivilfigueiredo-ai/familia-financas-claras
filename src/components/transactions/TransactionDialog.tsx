@@ -76,6 +76,13 @@ export interface EditingTransaction {
   status: string;
   notes: string | null;
   tags: string[] | null;
+  project_id?: string | null;
+}
+
+interface ProjectOption {
+  id: string;
+  project_number: string;
+  name: string;
 }
 
 const NONE = "__none__";
@@ -85,11 +92,13 @@ export function TransactionDialog({
   onOpenChange,
   initialKind = "despesa",
   editing,
+  initialProjectId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialKind?: QuickKind;
   editing?: EditingTransaction | null;
+  initialProjectId?: string | null;
 }) {
   const invalidate = useInvalidateFinance();
   const scope = useScope();
@@ -98,6 +107,8 @@ export function TransactionDialog({
   const cards = useTable<Card>("credit_cards");
   const categories = useTable<Category>("categories");
   const investments = useTable<Investment>("investments");
+  const projects = useTable<ProjectOption>("projects");
+  const [projectId, setProjectId] = useState<string>(NONE);
 
   const [kind, setKind] = useState<QuickKind>(initialKind);
   const [saving, setSaving] = useState(false);
@@ -148,7 +159,9 @@ export function TransactionDialog({
       setAccountId(editing.account_id ?? NONE);
       setCardId(editing.credit_card_id ?? NONE);
       setInstallmentMode(false);
+      setProjectId(editing.project_id ?? NONE);
     } else {
+      setProjectId(initialProjectId ?? NONE);
       setDescription("");
       setAmount("");
       setDate(todayISO());
@@ -168,7 +181,7 @@ export function TransactionDialog({
       setMoveType("aplicação");
       setIrType(NONE);
     }
-  }, [open, editing, initialKind, scope.view, scope.memberId]);
+  }, [open, editing, initialKind, initialProjectId, scope.view, scope.memberId]);
 
   const filteredCategories = useMemo(
     () =>
@@ -231,6 +244,7 @@ export function TransactionDialog({
               status,
               notes: notes || null,
               tags: [],
+              project_id: kind === "receita" && projectId !== NONE ? projectId : null,
             },
             useCard ? card : null,
           );
@@ -612,6 +626,32 @@ export function TransactionDialog({
                 </Select>
               </div>
             </>
+          ) : null}
+
+          {kind === "receita" ? (
+            <div className="grid gap-2">
+              <Label>Projeto BF Engenharia</Label>
+              <Select
+                value={projectId}
+                onValueChange={(v) => {
+                  setProjectId(v);
+                  const p = (projects.data ?? []).find((x) => x.id === v);
+                  if (p && !description.trim()) setDescription(`Recebimento ${p.project_number} - ${p.name}`);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>Sem projeto</SelectItem>
+                  {(projects.data ?? []).map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.project_number} · {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           ) : null}
 
           <div className="grid gap-2">
