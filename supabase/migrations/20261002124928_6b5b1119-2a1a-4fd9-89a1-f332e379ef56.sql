@@ -1,0 +1,2 @@
+ALTER TABLE public.transactions ADD COLUMN bf_expense_type text CHECK (bf_expense_type IN ('fixo','administrativo','projeto'));
+CREATE INDEX IF NOT EXISTS idx_transactions_bf_expense_type ON public.transactions(bf_expense_type) WHERE bf_expense_type IS NOT NULL;
