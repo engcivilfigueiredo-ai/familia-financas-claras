@@ -77,6 +77,7 @@ export interface EditingTransaction {
   notes: string | null;
   tags: string[] | null;
   project_id?: string | null;
+  bf_expense_type?: string | null;
 }
 
 interface ProjectOption {
@@ -93,12 +94,14 @@ export function TransactionDialog({
   initialKind = "despesa",
   editing,
   initialProjectId,
+  initialBfType,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialKind?: QuickKind;
   editing?: EditingTransaction | null;
   initialProjectId?: string | null;
+  initialBfType?: string | null;
 }) {
   const invalidate = useInvalidateFinance();
   const scope = useScope();
@@ -109,6 +112,7 @@ export function TransactionDialog({
   const investments = useTable<Investment>("investments");
   const projects = useTable<ProjectOption>("projects");
   const [projectId, setProjectId] = useState<string>(NONE);
+  const [bfType, setBfType] = useState<string>(NONE);
 
   const [kind, setKind] = useState<QuickKind>(initialKind);
   const [saving, setSaving] = useState(false);
@@ -160,8 +164,10 @@ export function TransactionDialog({
       setCardId(editing.credit_card_id ?? NONE);
       setInstallmentMode(false);
       setProjectId(editing.project_id ?? NONE);
+      setBfType(editing.bf_expense_type ?? NONE);
     } else {
       setProjectId(initialProjectId ?? NONE);
+      setBfType(initialBfType ?? NONE);
       setDescription("");
       setAmount("");
       setDate(todayISO());
@@ -244,7 +250,12 @@ export function TransactionDialog({
               status,
               notes: notes || null,
               tags: [],
-              project_id: kind === "receita" && projectId !== NONE ? projectId : null,
+              project_id:
+                projectId !== NONE &&
+                (kind === "receita" || (kind === "despesa" && bfType === "projeto"))
+                  ? projectId
+                  : null,
+              bf_expense_type: kind === "despesa" && bfType !== NONE ? bfType : null,
             },
             useCard ? card : null,
           );
@@ -628,7 +639,30 @@ export function TransactionDialog({
             </>
           ) : null}
 
-          {kind === "receita" ? (
+          {kind === "despesa" ? (
+            <div className="grid gap-2">
+              <Label>Despesa BF Engenharia</Label>
+              <Select
+                value={bfType}
+                onValueChange={(v) => {
+                  setBfType(v);
+                  if (v !== "projeto") setProjectId(NONE);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>Não é despesa da empresa</SelectItem>
+                  <SelectItem value="fixo">Custo fixo</SelectItem>
+                  <SelectItem value="administrativo">Administrativo</SelectItem>
+                  <SelectItem value="projeto">Específica de projeto</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
+
+          {kind === "receita" || (kind === "despesa" && bfType === "projeto") ? (
             <div className="grid gap-2">
               <Label>Projeto BF Engenharia</Label>
               <Select
@@ -636,7 +670,10 @@ export function TransactionDialog({
                 onValueChange={(v) => {
                   setProjectId(v);
                   const p = (projects.data ?? []).find((x) => x.id === v);
-                  if (p && !description.trim()) setDescription(`Recebimento ${p.project_number} - ${p.name}`);
+                  if (p && !description.trim())
+                    setDescription(
+                      `${kind === "receita" ? "Recebimento" : "Despesa"} ${p.project_number} - ${p.name}`,
+                    );
                 }}
               >
                 <SelectTrigger>
