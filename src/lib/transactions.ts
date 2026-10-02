@@ -50,6 +50,7 @@ export interface SimpleTxInput {
   tags: string[];
   project_id?: string | null;
   bf_expense_type?: string | null;
+  bf_expense_type?: string | null;
 }
 
 /** Rule 2: card expenses are attached to the matching invoice month. */
@@ -75,6 +76,7 @@ export async function saveSimpleTransaction(input: SimpleTxInput, card?: CardMet
     tags: input.tags,
     invoice_month,
     project_id: input.project_id ?? null,
+    bf_expense_type: input.bf_expense_type ?? null,
     bf_expense_type: input.bf_expense_type ?? null,
   };
 
