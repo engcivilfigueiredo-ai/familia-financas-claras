@@ -913,6 +913,7 @@ export type Database = {
         Row: {
           account_id: string | null
           amount: number
+          bf_expense_type: string | null
           category_id: string | null
           created_at: string
           credit_card_id: string | null
@@ -938,6 +939,7 @@ export type Database = {
         Insert: {
           account_id?: string | null
           amount: number
+          bf_expense_type?: string | null
           category_id?: string | null
           created_at?: string
           credit_card_id?: string | null
@@ -963,6 +965,7 @@ export type Database = {
         Update: {
           account_id?: string | null
           amount?: number
+          bf_expense_type?: string | null
           category_id?: string | null
           created_at?: string
           credit_card_id?: string | null

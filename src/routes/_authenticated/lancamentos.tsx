@@ -337,6 +337,7 @@ function TransactionsPage() {
                                 status: t.status,
                                 notes: t.notes,
                                 project_id: (t as { project_id?: string | null }).project_id ?? null,
+                                bf_expense_type: (t as { bf_expense_type?: string | null }).bf_expense_type ?? null,
                                 tags: t.tags,
                               });
                               setDialogOpen(true);
