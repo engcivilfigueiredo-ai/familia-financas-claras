@@ -529,6 +529,12 @@ function InvestimentosPage() {
         </Card>
       </div>
 
+      <AllocationChart
+        title="Alocação por tipo"
+        description="Distribuição do valor atual da carteira por classe de ativo."
+        slices={allocation}
+      />
+
       {investments.isLoading ? (
         <LoadingState rows={4} />
       ) : investments.isError ? (
