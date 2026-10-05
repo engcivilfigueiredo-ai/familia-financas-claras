@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Building2, HandCoins, Pencil, Plus, Trash2 } from "lucide-react";
+import { Building2, HandCoins,
+  Receipt, Pencil, Plus, Trash2 } from "lucide-react";
 import { TransactionDialog } from "@/components/transactions/TransactionDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -123,6 +124,33 @@ function BfEngenhariaPage() {
   const [form, setForm] = useState(emptyForm);
   const [statusFilter, setStatusFilter] = useState("all");
   const [receiveProject, setReceiveProject] = useState<string | null>(null);
+  const [expenseOpen, setExpenseOpen] = useState<{ projectId: string | null; type: string } | null>(
+    null,
+  );
+  const txs = useTable<{
+    type: string;
+    amount: number;
+    project_id: string | null;
+    bf_expense_type: string | null;
+  }>("transactions");
+
+  const expenses = useMemo(() => {
+    const byProject = new Map<string, number>();
+    let fixo = 0;
+    let administrativo = 0;
+    let projeto = 0;
+    for (const t of txs.data ?? []) {
+      if (t.type !== "despesa" || !t.bf_expense_type) continue;
+      const v = Math.abs(Number(t.amount ?? 0));
+      if (t.bf_expense_type === "fixo") fixo += v;
+      else if (t.bf_expense_type === "administrativo") administrativo += v;
+      else {
+        projeto += v;
+        if (t.project_id) byProject.set(t.project_id, (byProject.get(t.project_id) ?? 0) + v);
+      }
+    }
+    return { byProject, fixo, administrativo, projeto };
+  }, [txs.data]);
 
   const rows = useMemo(() => {
     const list = projects.data ?? [];
@@ -193,11 +221,43 @@ function BfEngenhariaPage() {
         title="BF Engenharia"
         description="Controle gerencial dos projetos: orçamentos, contratos e recebimentos."
         actions={
-          <Button onClick={openNew}>
-            <Plus className="mr-2 h-4 w-4" /> Adicionar orçamento
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setExpenseOpen({ projectId: null, type: "administrativo" })}
+            >
+              <Receipt className="mr-2 h-4 w-4" /> Lançar despesa
+            </Button>
+            <Button onClick={openNew}>
+              <Plus className="mr-2 h-4 w-4" /> Adicionar orçamento
+            </Button>
+          </div>
         }
       />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          { label: "Custos fixos", value: expenses.fixo },
+          { label: "Despesas administrativas", value: expenses.administrativo },
+          { label: "Despesas de projetos", value: expenses.projeto },
+          {
+            label: "Resultado da empresa",
+            value:
+              totals.received - expenses.fixo - expenses.administrativo - expenses.projeto,
+          },
+        ].map((c) => (
+          <Card key={c.label}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                {c.label}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xl font-semibold">{formatBRL(c.value)}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Card>
@@ -290,6 +350,8 @@ function BfEngenhariaPage() {
                   <TableHead className="text-right">Contrato</TableHead>
                   <TableHead className="text-right">Recebido</TableHead>
                   <TableHead className="text-right">Saldo</TableHead>
+                  <TableHead className="text-right">Despesas</TableHead>
+                  <TableHead className="text-right">Margem</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -324,6 +386,26 @@ function BfEngenhariaPage() {
                         ) : null}
                       </TableCell>
                       <TableCell className="text-right">{formatBRL(balance)}</TableCell>
+                      {(() => {
+                        const cost = expenses.byProject.get(row.id) ?? 0;
+                        const margin = contract - cost;
+                        const mPct = contract > 0 ? (margin / contract) * 100 : 0;
+                        return (
+                          <>
+                            <TableCell className="text-right">{formatBRL(cost)}</TableCell>
+                            <TableCell
+                              className={`text-right font-medium ${margin < 0 ? "text-destructive" : ""}`}
+                            >
+                              {formatBRL(margin)}
+                              {contract > 0 ? (
+                                <span className="ml-1 text-xs text-muted-foreground">
+                                  ({formatPercent(mPct, 0)})
+                                </span>
+                              ) : null}
+                            </TableCell>
+                          </>
+                        );
+                      })()}
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
                           <Button
@@ -334,6 +416,15 @@ function BfEngenhariaPage() {
                             onClick={() => setReceiveProject(row.id)}
                           >
                             <HandCoins className="h-4 w-4 text-primary" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Lançar despesa do projeto"
+                            aria-label="Lançar despesa do projeto"
+                            onClick={() => setExpenseOpen({ projectId: row.id, type: "projeto" })}
+                          >
+                            <Receipt className="h-4 w-4 text-destructive" />
                           </Button>
                           <Button variant="ghost" size="icon" onClick={() => openEdit(row)}>
                             <Pencil className="h-4 w-4" />
@@ -365,6 +456,17 @@ function BfEngenhariaPage() {
         initialKind="receita"
         initialProjectId={receiveProject}
       />
+
+      <TransactionDialog
+        open={expenseOpen !== null}
+        onOpenChange={(o) => {
+          if (!o) setExpenseOpen(null);
+        }}
+        initialKind="despesa"
+        initialProjectId={expenseOpen?.projectId ?? null}
+        initialBfType={expenseOpen?.type ?? null}
+      />
+
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl">
