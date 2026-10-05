@@ -242,6 +242,17 @@ function InvestimentosPage() {
     };
   }, [rows, quoteMap]);
 
+  const allocation = useMemo(() => {
+    const byType = new Map<string, number>();
+    for (const r of rows) {
+      const quote = r.ticker ? quoteMap.get(normalizeTicker(r.ticker)) : undefined;
+      const qty = Number(r.quantity ?? 0);
+      const value = quote && qty > 0 ? qty * quote.price : Number(r.current_amount);
+      byType.set(r.type, (byType.get(r.type) ?? 0) + value);
+    }
+    return [...byType.entries()].map(([name, value]) => ({ name, value }));
+  }, [rows, quoteMap]);
+
   const invName = useMemo(() => new Map(rows.map((r) => [r.id, r.name])), [rows]);
   const accName = useMemo(
     () => new Map((accounts.data ?? []).map((a) => [a.id, a.name])),
