@@ -41,6 +41,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/shared/states";
+import { AllocationChart } from "@/components/shared/allocation-chart";
 import { ConfirmDelete } from "@/components/shared/confirm-delete";
 import { useInvalidateFinance, useRemove, useTable, useUpsert } from "@/hooks/useFinance";
 import { useScope } from "@/hooks/useScope";
