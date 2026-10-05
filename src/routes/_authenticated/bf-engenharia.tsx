@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Building2, HandCoins, Pencil, Plus, Trash2 } from "lucide-react";
+import { Building2, HandCoins,
+  Receipt, Pencil, Plus, Trash2 } from "lucide-react";
 import { TransactionDialog } from "@/components/transactions/TransactionDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
