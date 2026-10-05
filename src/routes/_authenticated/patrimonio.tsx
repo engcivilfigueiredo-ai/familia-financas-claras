@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/shared/states";
+import { AllocationChart } from "@/components/shared/allocation-chart";
 import { ConfirmDelete } from "@/components/shared/confirm-delete";
 import { useRemove, useTable, useUpsert } from "@/hooks/useFinance";
 import { useScope } from "@/hooks/useScope";
@@ -219,6 +220,45 @@ function PatrimonioPage() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <AllocationChart
+          title="Composição do patrimônio"
+          description="Onde o patrimônio está alocado: contas, investimentos e bens."
+          slices={[
+            { name: "Contas", value: summary.cash },
+            { name: "Investimentos", value: summary.invested },
+            { name: "Bens", value: summary.goods },
+          ]}
+        />
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Compromissos</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Valores que reduzem o patrimônio líquido.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {[
+              { label: "Faturas de cartões", value: summary.cardDebt },
+              { label: "Dívidas e financiamentos", value: summary.debts },
+            ].map((item) => (
+              <div key={item.label} className="flex items-center justify-between text-sm">
+                <span>{item.label}</span>
+                <span className="font-medium text-destructive">
+                  -{formatBRL(item.value)}
+                </span>
+              </div>
+            ))}
+            <div className="flex items-center justify-between border-t pt-3 text-sm font-semibold">
+              <span>Patrimônio líquido</span>
+              <span className={summary.total < 0 ? "text-destructive" : "text-chart-2"}>
+                {formatBRL(summary.total)}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {loading ? (

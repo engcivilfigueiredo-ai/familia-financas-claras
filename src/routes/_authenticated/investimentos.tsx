@@ -41,6 +41,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/shared/states";
+import { AllocationChart } from "@/components/shared/allocation-chart";
 import { ConfirmDelete } from "@/components/shared/confirm-delete";
 import { useInvalidateFinance, useRemove, useTable, useUpsert } from "@/hooks/useFinance";
 import { useScope } from "@/hooks/useScope";
@@ -239,6 +240,17 @@ function InvestimentosPage() {
       profit: current - invested,
       pct: invested > 0 ? ((current - invested) / invested) * 100 : 0,
     };
+  }, [rows, quoteMap]);
+
+  const allocation = useMemo(() => {
+    const byType = new Map<string, number>();
+    for (const r of rows) {
+      const quote = r.ticker ? quoteMap.get(normalizeTicker(r.ticker)) : undefined;
+      const qty = Number(r.quantity ?? 0);
+      const value = quote && qty > 0 ? qty * quote.price : Number(r.current_amount);
+      byType.set(r.type, (byType.get(r.type) ?? 0) + value);
+    }
+    return [...byType.entries()].map(([name, value]) => ({ name, value }));
   }, [rows, quoteMap]);
 
   const invName = useMemo(() => new Map(rows.map((r) => [r.id, r.name])), [rows]);
@@ -516,6 +528,12 @@ function InvestimentosPage() {
           </CardContent>
         </Card>
       </div>
+
+      <AllocationChart
+        title="Alocação por tipo"
+        description="Distribuição do valor atual da carteira por classe de ativo."
+        slices={allocation}
+      />
 
       {investments.isLoading ? (
         <LoadingState rows={4} />
