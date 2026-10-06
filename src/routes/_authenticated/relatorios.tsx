@@ -20,6 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ErrorState, LoadingState, PageHeader } from "@/components/shared/states";
 import { PeriodFilter } from "@/components/shared/period-filter";
 import { useTable } from "@/hooks/useFinance";
+import { InvestmentEvolution } from "@/components/reports/investment-evolution";
 import { useScope } from "@/hooks/useScope";
 import {
   inPeriod,
@@ -307,6 +308,8 @@ function RelatoriosPage() {
               </CardContent>
             </Card>
           </div>
+
+          <InvestmentEvolution months={monthsInRange(period.from, period.to)} />
 
           <Card>
             <CardHeader>
