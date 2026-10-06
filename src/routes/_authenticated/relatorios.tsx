@@ -50,14 +50,11 @@ interface Named {
 }
 
 const FALLBACK_COLORS = [
-  "#2563eb",
-  "#16a34a",
-  "#f59e0b",
-  "#dc2626",
-  "#7c3aed",
-  "#0891b2",
-  "#db2777",
-  "#65a30d",
+  "var(--color-chart-1)",
+  "var(--color-chart-2)",
+  "var(--color-chart-3)",
+  "var(--color-chart-4)",
+  "var(--color-chart-5)",
 ];
 
 function RelatoriosPage() {
@@ -117,10 +114,11 @@ function RelatoriosPage() {
       const existing = map.get(key);
       if (existing) existing.value += Number(t.amount);
       else {
+        const savedColor = cat?.color?.trim();
         map.set(key, {
           name: cat?.name ?? "Sem categoria",
           value: Number(t.amount),
-          color: cat?.color ?? FALLBACK_COLORS[i % FALLBACK_COLORS.length]!,
+          color: savedColor || FALLBACK_COLORS[i % FALLBACK_COLORS.length] || "var(--color-chart-1)",
         });
         i += 1;
       }
@@ -267,6 +265,7 @@ function RelatoriosPage() {
                         ))}
                       </Pie>
                       <Tooltip formatter={(v) => formatBRL(Number(v))} />
+                      <Legend iconType="circle" />
                     </PieChart>
                   </ResponsiveContainer>
                 )}
