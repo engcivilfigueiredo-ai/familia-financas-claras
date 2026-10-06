@@ -57,6 +57,8 @@ const FALLBACK_COLORS = [
   "var(--color-chart-5)",
 ];
 
+const DEFAULT_CATEGORY_COLOR = "#64748b";
+
 function RelatoriosPage() {
   const scope = useScope();
   const transactions = useTable<Tx>("transactions");
@@ -115,10 +117,13 @@ function RelatoriosPage() {
       if (existing) existing.value += Number(t.amount);
       else {
         const savedColor = cat?.color?.trim();
+        const chartColor = savedColor && savedColor.toLowerCase() !== DEFAULT_CATEGORY_COLOR
+          ? savedColor
+          : FALLBACK_COLORS[i % FALLBACK_COLORS.length] || "var(--color-chart-1)";
         map.set(key, {
           name: cat?.name ?? "Sem categoria",
           value: Number(t.amount),
-          color: savedColor || FALLBACK_COLORS[i % FALLBACK_COLORS.length] || "var(--color-chart-1)",
+          color: chartColor,
         });
         i += 1;
       }
