@@ -1,0 +1,1 @@
+ALTER TABLE public.recurring_transactions ADD COLUMN IF NOT EXISTS is_variable_amount boolean NOT NULL DEFAULT false, ADD COLUMN IF NOT EXISTS due_day integer, ADD COLUMN IF NOT EXISTS alert_days integer NOT NULL DEFAULT 7;
