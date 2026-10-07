@@ -360,11 +360,14 @@ export type Database = {
           created_at: string
           current_amount: number
           family_member_id: string | null
+          goal_kind: string
+          goal_year: number | null
           id: string
           monthly_contribution_needed: number | null
           name: string
           target_amount: number
           target_date: string | null
+          unit: string | null
           updated_at: string
           user_id: string
         }
@@ -373,11 +376,14 @@ export type Database = {
           created_at?: string
           current_amount?: number
           family_member_id?: string | null
+          goal_kind?: string
+          goal_year?: number | null
           id?: string
           monthly_contribution_needed?: number | null
           name: string
           target_amount?: number
           target_date?: string | null
+          unit?: string | null
           updated_at?: string
           user_id: string
         }
@@ -386,11 +392,14 @@ export type Database = {
           created_at?: string
           current_amount?: number
           family_member_id?: string | null
+          goal_kind?: string
+          goal_year?: number | null
           id?: string
           monthly_contribution_needed?: number | null
           name?: string
           target_amount?: number
           target_date?: string | null
+          unit?: string | null
           updated_at?: string
           user_id?: string
         }

@@ -59,6 +59,34 @@ interface GoalRow {
   target_date: string | null;
   category: string | null;
   family_member_id: string | null;
+  goal_kind: string;
+  goal_year: number | null;
+  unit: string | null;
+}
+
+interface ProjectLite {
+  id: string;
+  budget_date: string | null;
+  closing_date: string | null;
+}
+
+interface TxLite {
+  type: string;
+  amount: number;
+  date: string;
+  project_id: string | null;
+}
+
+const GOAL_KINDS = [
+  { value: "financeiro", label: "Valor financeiro", auto: false, money: true },
+  { value: "bf_orcados", label: "BF · Projetos orçados", auto: true, money: false },
+  { value: "bf_fechados", label: "BF · Projetos fechados", auto: true, money: false },
+  { value: "bf_faturamento", label: "BF · Faturamento recebido", auto: true, money: true },
+  { value: "quantidade", label: "Quantidade (manual)", auto: false, money: false },
+] as const;
+
+function kindInfo(k: string) {
+  return GOAL_KINDS.find((g) => g.value === k) ?? GOAL_KINDS[0];
 }
 
 const NONE = "__none__";
@@ -71,6 +99,9 @@ const emptyForm = {
   target_date: "",
   category: "",
   family_member_id: NONE,
+  goal_kind: "financeiro",
+  goal_year: String(new Date().getFullYear()),
+  unit: "",
 };
 
 function monthsUntil(dateISO: string | null): number {
@@ -86,6 +117,8 @@ function MetasPage() {
   const scope = useScope();
   const goals = useTable<GoalRow>("financial_goals");
   const members = useTable<Named>("family_members");
+  const projects = useTable<ProjectLite>("projects");
+  const txs = useTable<TxLite>("transactions");
   const upsert = useUpsert("financial_goals", "Meta salva");
   const remove = useRemove("financial_goals", "Meta excluída");
 
@@ -106,19 +139,37 @@ function MetasPage() {
         .filter((g) => scope.matches(g.family_member_id))
         .map((g) => {
           const target = Number(g.target_amount);
-          const current = Number(g.current_amount);
+          const info = kindInfo(g.goal_kind);
+          const year = String(g.goal_year ?? new Date().getFullYear());
+          let current = Number(g.current_amount);
+          if (g.goal_kind === "bf_orcados")
+            current = (projects.data ?? []).filter((p) => p.budget_date?.startsWith(year)).length;
+          else if (g.goal_kind === "bf_fechados")
+            current = (projects.data ?? []).filter((p) => p.closing_date?.startsWith(year)).length;
+          else if (g.goal_kind === "bf_faturamento")
+            current = (txs.data ?? [])
+              .filter((t) => t.project_id && t.type === "receita" && t.date.startsWith(year))
+              .reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
           const pct = target > 0 ? (current / target) * 100 : 0;
           const months = monthsUntil(g.target_date);
           const missing = Math.max(target - current, 0);
+          const fmt = (v: number) =>
+            info.money
+              ? formatBRL(v)
+              : `${v.toLocaleString("pt-BR")}${g.unit ? ` ${g.unit}` : info.auto ? " projetos" : ""}`;
           return {
             ...g,
+            current_amount: current,
+            info,
+            fmt,
+            year,
             pct,
             missing,
             monthly: months > 0 ? missing / months : missing,
             months,
           };
         }),
-    [goals.data, scope],
+    [goals.data, scope, projects.data, txs.data],
   );
 
   function openNew() {
@@ -128,19 +179,28 @@ function MetasPage() {
 
   function save() {
     if (!form.name.trim()) return;
+    const info = kindInfo(form.goal_kind);
     const target = parseCurrencyInput(form.target_amount || "0");
-    const current = parseCurrencyInput(form.current_amount || "0");
-    const months = monthsUntil(form.target_date || null);
+    const current = info.auto ? 0 : parseCurrencyInput(form.current_amount || "0");
+    const year = Number(form.goal_year) || new Date().getFullYear();
+    const targetDate = info.auto ? form.target_date || `${year}-12-31` : form.target_date || null;
+    const months = monthsUntil(targetDate);
     upsert.mutate(
       {
         ...(form.id ? { id: form.id } : {}),
         name: form.name.trim(),
         target_amount: target,
         current_amount: current,
-        target_date: form.target_date || null,
+        target_date: targetDate,
         category: form.category.trim() || null,
-        monthly_contribution_needed:
-          months > 0 ? Math.max(target - current, 0) / months : Math.max(target - current, 0),
+        goal_kind: form.goal_kind,
+        goal_year: info.auto ? year : null,
+        unit: form.goal_kind === "quantidade" ? form.unit.trim() || null : null,
+        monthly_contribution_needed: info.money
+          ? months > 0
+            ? Math.max(target - current, 0) / months
+            : Math.max(target - current, 0)
+          : null,
         family_member_id: form.family_member_id === NONE ? null : form.family_member_id,
       },
       { onSuccess: () => setOpen(false) },
@@ -159,6 +219,8 @@ function MetasPage() {
         target_date: contribGoal.target_date,
         category: contribGoal.category,
         family_member_id: contribGoal.family_member_id,
+        goal_kind: contribGoal.goal_kind,
+        unit: contribGoal.unit,
       },
       {
         onSuccess: () => {
@@ -204,7 +266,8 @@ function MetasPage() {
                 <div>
                   <CardTitle className="text-base">{row.name}</CardTitle>
                   <p className="text-xs text-muted-foreground">
-                    {row.category ?? "Sem categoria"}
+                    {row.info.label}
+                    {row.info.auto ? ` · ${row.year}` : row.category ? ` · ${row.category}` : ""}
                     {row.target_date ? ` · até ${formatDateBR(row.target_date)}` : ""}
                   </p>
                 </div>
@@ -221,6 +284,9 @@ function MetasPage() {
                         target_date: row.target_date ?? "",
                         category: row.category ?? "",
                         family_member_id: row.family_member_id ?? NONE,
+                        goal_kind: row.goal_kind ?? "financeiro",
+                        goal_year: String(row.goal_year ?? new Date().getFullYear()),
+                        unit: row.unit ?? "",
                       });
                       setOpen(true);
                     }}
@@ -239,9 +305,9 @@ function MetasPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-xl font-semibold">
-                  {formatBRL(Number(row.current_amount))}{" "}
+                  {row.fmt(Number(row.current_amount))}{" "}
                   <span className="text-sm font-normal text-muted-foreground">
-                    de {formatBRL(Number(row.target_amount))}
+                    de {row.fmt(Number(row.target_amount))}
                   </span>
                 </p>
                 <Progress value={Math.min(row.pct, 100)} />
@@ -255,14 +321,17 @@ function MetasPage() {
                 </div>
                 {row.missing > 0 ? (
                   <p className="text-xs text-muted-foreground">
-                    Faltam {formatBRL(row.missing)}
+                    Faltam {row.fmt(row.missing)}
                     {row.months > 0
-                      ? ` · ${formatBRL(row.monthly)}/mês em ${row.months} meses`
+                      ? ` · ${row.fmt(Math.ceil(row.info.money ? row.monthly * 100 : row.monthly) / (row.info.money ? 100 : 1))}/mês em ${row.months} meses`
                       : ""}
                   </p>
                 ) : (
-                  <p className="text-xs text-success-foreground">Meta alcançada!</p>
+                  <p className="text-xs text-primary">Meta alcançada!</p>
                 )}
+                {row.info.auto ? (
+                  <p className="text-xs text-muted-foreground">Atualizado automaticamente pela BF Engenharia</p>
+                ) : (
                 <Button
                   variant="outline"
                   size="sm"
@@ -273,8 +342,9 @@ function MetasPage() {
                     setContribOpen(true);
                   }}
                 >
-                  Registrar aporte
+                  {row.info.money ? "Registrar aporte" : "Registrar progresso"}
                 </Button>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -288,6 +358,21 @@ function MetasPage() {
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2 sm:col-span-2">
+              <Label>Tipo de meta</Label>
+              <Select value={form.goal_kind} onValueChange={(v) => setForm({ ...form, goal_kind: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {GOAL_KINDS.map((k) => (
+                    <SelectItem key={k.value} value={k.value}>
+                      {k.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2 sm:col-span-2">
               <Label htmlFor="go-name">Nome</Label>
               <Input
                 id="go-name"
@@ -297,7 +382,7 @@ function MetasPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="go-target">Valor alvo</Label>
+              <Label htmlFor="go-target">{kindInfo(form.goal_kind).money ? "Valor alvo" : "Meta (quantidade)"}</Label>
               <Input
                 id="go-target"
                 value={form.target_amount}
@@ -306,6 +391,17 @@ function MetasPage() {
                 placeholder="0,00"
               />
             </div>
+            {kindInfo(form.goal_kind).auto ? (
+            <div className="grid gap-2">
+              <Label htmlFor="go-year">Ano</Label>
+              <Input
+                id="go-year"
+                value={form.goal_year}
+                onChange={(e) => setForm({ ...form, goal_year: e.target.value })}
+                inputMode="numeric"
+              />
+            </div>
+            ) : (
             <div className="grid gap-2">
               <Label htmlFor="go-current">Valor atual</Label>
               <Input
@@ -316,6 +412,18 @@ function MetasPage() {
                 placeholder="0,00"
               />
             </div>
+            )}
+            {form.goal_kind === "quantidade" && (
+              <div className="grid gap-2 sm:col-span-2">
+                <Label htmlFor="go-unit">Unidade</Label>
+                <Input
+                  id="go-unit"
+                  value={form.unit}
+                  onChange={(e) => setForm({ ...form, unit: e.target.value })}
+                  placeholder="ARTs, m², visitas..."
+                />
+              </div>
+            )}
             <div className="grid gap-2">
               <Label htmlFor="go-date">Data alvo</Label>
               <Input
