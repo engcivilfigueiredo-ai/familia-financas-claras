@@ -825,11 +825,13 @@ export type Database = {
       recurring_transactions: {
         Row: {
           account_id: string | null
+          alert_days: number
           amount: number
           category_id: string | null
           created_at: string
           credit_card_id: string | null
           description: string
+          due_day: number | null
           end_date: string | null
           family_member_id: string | null
           frequency: string
@@ -837,6 +839,7 @@ export type Database = {
           investment_id: string | null
           is_active: boolean
           is_investment_contribution: boolean | null
+          is_variable_amount: boolean
           start_date: string
           type: string
           updated_at: string
@@ -844,11 +847,13 @@ export type Database = {
         }
         Insert: {
           account_id?: string | null
+          alert_days?: number
           amount: number
           category_id?: string | null
           created_at?: string
           credit_card_id?: string | null
           description: string
+          due_day?: number | null
           end_date?: string | null
           family_member_id?: string | null
           frequency?: string
@@ -856,6 +861,7 @@ export type Database = {
           investment_id?: string | null
           is_active?: boolean
           is_investment_contribution?: boolean | null
+          is_variable_amount?: boolean
           start_date?: string
           type?: string
           updated_at?: string
@@ -863,11 +869,13 @@ export type Database = {
         }
         Update: {
           account_id?: string | null
+          alert_days?: number
           amount?: number
           category_id?: string | null
           created_at?: string
           credit_card_id?: string | null
           description?: string
+          due_day?: number | null
           end_date?: string | null
           family_member_id?: string | null
           frequency?: string
@@ -875,6 +883,7 @@ export type Database = {
           investment_id?: string | null
           is_active?: boolean
           is_investment_contribution?: boolean | null
+          is_variable_amount?: boolean
           start_date?: string
           type?: string
           updated_at?: string
