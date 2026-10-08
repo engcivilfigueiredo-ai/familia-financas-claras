@@ -80,6 +80,7 @@ interface TxRow {
   date: string;
   status: string;
   type: string;
+  amount: number;
 }
 
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
@@ -256,6 +257,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
                         className="flex flex-col items-start gap-1"
                       >
                         <span className="text-sm font-medium">{a.description}</span>
+                        {a.type === "despesa" && Number(a.amount) === 0 ? (
+                          <span className="text-xs font-medium text-destructive">Informe o valor da fatura</span>
+                        ) : null}
                         <span className="flex items-center gap-2 text-xs text-muted-foreground">
                           {formatDateBR(a.date)}
                           <Badge variant={a.late ? "destructive" : "secondary"}>

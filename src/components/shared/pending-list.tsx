@@ -16,7 +16,9 @@ import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/s
 import { useTable, useUpsert } from "@/hooks/useFinance";
 import { useScope } from "@/hooks/useScope";
 import type { Tx } from "@/lib/finance";
-import { formatBRL, formatDateBR, daysBetween, todayISO } from "@/lib/format";
+import { formatBRL, formatDateBR, daysBetween, todayISO, parseCurrencyInput } from "@/lib/format";
+import { VariableBills } from "@/components/shared/variable-bills";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface Named {
   id: string;
@@ -39,6 +41,9 @@ export function PendingList({
   const categories = useTable<Named>("categories");
   const update = useUpsert("transactions", kind === "despesa" ? "Pagamento registrado" : "Recebimento registrado");
   const [search, setSearch] = useState("");
+  const valueUpdate = useUpsert("transactions", "Valor da fatura registrado");
+  const [valueTx, setValueTx] = useState<Tx | null>(null);
+  const [valueInput, setValueInput] = useState("");
 
   const accountName = useMemo(
     () => new Map((accounts.data ?? []).map((a) => [a.id, a.name])),
@@ -102,6 +107,8 @@ export function PendingList({
         </Card>
       </div>
 
+      {kind === "despesa" ? <VariableBills /> : null}
+
       <Input
         value={search}
         onChange={(e) => setSearch(e.target.value)}
@@ -144,7 +151,14 @@ export function PendingList({
                         {statusBadge(t.date)}
                       </div>
                     </TableCell>
-                    <TableCell className="font-medium">{t.description}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {t.description}
+                        {kind === "despesa" && Number(t.amount) === 0 ? (
+                          <Badge className="bg-chart-4 text-foreground hover:bg-chart-4">Aguardando valor da fatura</Badge>
+                        ) : null}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-muted-foreground">
                       {t.category_id ? categoryName.get(t.category_id) ?? "-" : "-"}
                     </TableCell>
@@ -160,8 +174,14 @@ export function PendingList({
                     >
                       {formatBRL(Number(t.amount))}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="space-x-2 whitespace-nowrap text-right">
+                      {kind === "despesa" && Number(t.amount) === 0 ? (
+                        <Button size="sm" onClick={() => { setValueTx(t); setValueInput(""); }}>
+                          Informar valor
+                        </Button>
+                      ) : null}
                       <Button
+                        disabled={kind === "despesa" && Number(t.amount) === 0}
                         size="sm"
                         variant="outline"
                         onClick={() => update.mutate({ id: t.id, status: "pago" })}
@@ -177,6 +197,22 @@ export function PendingList({
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={!!valueTx} onOpenChange={(o) => !o && setValueTx(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Valor da fatura · {valueTx?.description}</DialogTitle></DialogHeader>
+          <Input autoFocus inputMode="decimal" placeholder="0,00" value={valueInput} onChange={(e) => setValueInput(e.target.value)} />
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                const v = parseCurrencyInput(valueInput);
+                if (!valueTx || !(v > 0)) return;
+                valueUpdate.mutate({ id: valueTx.id, amount: v }, { onSuccess: () => setValueTx(null) });
+              }}
+            >Salvar valor</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
