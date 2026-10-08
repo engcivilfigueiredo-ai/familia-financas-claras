@@ -95,7 +95,7 @@ export function VariableBills() {
 
   async function save() {
     const day = Number(form.due_day);
-    if (!form.description.trim() || !(day >= 1 && day <= 31)) return toast.error("Informe descrição e dia de vencimento (1-31)");
+    if (!form.description.trim() || !(day >= 1 && day <= 31)) { toast.error("Informe descrição e dia de vencimento (1-31)"); return; }
     const { data: u } = await supabase.auth.getUser();
     if (!u.user) return;
     const { error } = await supabase.from("recurring_transactions").insert({
@@ -106,7 +106,7 @@ export function VariableBills() {
       account_id: form.account_id === NONE ? null : form.account_id,
       family_member_id: form.family_member_id === NONE ? null : form.family_member_id,
     } as never);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success("Conta mensal cadastrada");
     setOpen(false);
     setForm({ ...form, description: "" });
@@ -116,7 +116,7 @@ export function VariableBills() {
   async function removeBill(id: string) {
     await supabase.from("transactions").delete().eq("recurring_id", id).eq("status", "pendente").eq("amount", 0);
     const { error } = await supabase.from("recurring_transactions").update({ is_active: false, is_variable_amount: false } as never).eq("id", id);
-    if (error) return toast.error(error.message);
+    if (error) { toast.error(error.message); return; }
     toast.success("Conta mensal removida");
     invalidate();
   }
