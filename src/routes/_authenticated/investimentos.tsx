@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip as RTooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowDownUp,
@@ -105,6 +114,9 @@ interface InvestmentTx {
   amount: number;
   date: string;
   ir_type: string | null;
+  quantity: number | null;
+  rate_per_share: number | null;
+  yield_percent: number | null;
 }
 
 const NONE = "__none__";
@@ -264,21 +276,37 @@ function InvestimentosPage() {
     [moves.data, invName],
   );
 
+  const [divFilter, setDivFilter] = useState<string>("__all__");
   const dividends = useMemo(() => {
-    const list = (moves.data ?? []).filter(
+    const all = (moves.data ?? []).filter(
       (m) =>
         invName.has(m.investment_id) &&
         ["dividendo", "jcp", "rendimento"].includes(m.type),
     );
+    const list = divFilter === "__all__" ? all : all.filter((m) => m.investment_id === divFilter);
     const year = String(new Date().getFullYear());
+    const now = new Date();
+    const monthly: { month: string; label: string; total: number }[] = [];
+    for (let k = 11; k >= 0; k--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - k, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      monthly.push({
+        month: key,
+        label: d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
+        total: list.filter((m) => m.date.startsWith(key)).reduce((s, m) => s + Number(m.amount), 0),
+      });
+    }
+    const assets = Array.from(new Set(all.map((m) => m.investment_id)));
     return {
-      list: list.slice(0, 20),
+      list: [...list].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30),
       total: list.reduce((s, m) => s + Number(m.amount), 0),
       year: list
         .filter((m) => m.date.startsWith(year))
         .reduce((s, m) => s + Number(m.amount), 0),
+      monthly,
+      assets,
     };
-  }, [moves.data, invName]);
+  }, [moves.data, invName, divFilter]);
 
   const dividendByInvestment = useMemo(() => {
     const map = new Map<string, number>();
@@ -927,8 +955,35 @@ function InvestimentosPage() {
               {new Date().getFullYear()}
             </p>
           </div>
+          <Select value={divFilter} onValueChange={setDivFilter}>
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todos os ativos</SelectItem>
+              {dividends.assets.map((id) => (
+                <SelectItem key={id} value={id}>
+                  {invName.get(id)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </CardHeader>
         <CardContent className="p-0">
+          {dividends.total > 0 ? (
+            <div className="h-56 px-4 pb-4">
+              <p className="mb-2 text-xs text-muted-foreground">Proventos dos últimos 12 meses</p>
+              <ResponsiveContainer width="100%" height="90%">
+                <BarChart data={dividends.monthly}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                  <XAxis dataKey="label" fontSize={11} />
+                  <YAxis fontSize={11} tickFormatter={(v) => `R$${v}`} width={60} />
+                  <RTooltip formatter={(v: number) => formatBRL(Number(v))} />
+                  <Bar dataKey="total" name="Proventos" fill="var(--color-chart-2)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : null}
           {dividends.list.length === 0 ? (
             <p className="px-6 pb-6 text-sm text-muted-foreground">
               Nenhum provento registrado. Use o botão de movimentação em um ativo e escolha
@@ -941,6 +996,9 @@ function InvestimentosPage() {
                   <TableHead>Data</TableHead>
                   <TableHead>Ativo</TableHead>
                   <TableHead>Tipo</TableHead>
+                  <TableHead className="text-right">Cotas</TableHead>
+                  <TableHead className="text-right">R$/cota</TableHead>
+                  <TableHead className="text-right">Yield</TableHead>
                   <TableHead>Conta</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
                 </TableRow>
@@ -952,6 +1010,23 @@ function InvestimentosPage() {
                     <TableCell>{invName.get(m.investment_id)}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{m.type}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {m.quantity != null ? Number(m.quantity).toLocaleString("pt-BR") : "-"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {m.rate_per_share != null
+                        ? Number(m.rate_per_share).toLocaleString("pt-BR", {
+                            style: "currency",
+                            currency: "BRL",
+                            minimumFractionDigits: 4,
+                          })
+                        : "-"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {m.yield_percent != null
+                        ? `${Number(m.yield_percent).toFixed(2).replace(".", ",")}%`
+                        : "-"}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {m.account_id ? (accName.get(m.account_id) ?? "-") : "-"}

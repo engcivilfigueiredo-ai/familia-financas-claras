@@ -483,8 +483,11 @@ export type Database = {
           id: string
           investment_id: string
           ir_type: string | null
+          quantity: number | null
+          rate_per_share: number | null
           type: string
           user_id: string
+          yield_percent: number | null
         }
         Insert: {
           account_id?: string | null
@@ -494,8 +497,11 @@ export type Database = {
           id?: string
           investment_id: string
           ir_type?: string | null
+          quantity?: number | null
+          rate_per_share?: number | null
           type?: string
           user_id: string
+          yield_percent?: number | null
         }
         Update: {
           account_id?: string | null
@@ -505,8 +511,11 @@ export type Database = {
           id?: string
           investment_id?: string
           ir_type?: string | null
+          quantity?: number | null
+          rate_per_share?: number | null
           type?: string
           user_id?: string
+          yield_percent?: number | null
         }
         Relationships: [
           {

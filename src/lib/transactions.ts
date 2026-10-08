@@ -227,6 +227,24 @@ async function executeInvestmentMove(input: InvestmentMoveInput) {
   const user_id = await uid();
   const amount = Math.abs(input.amount);
 
+  let quantity: number | null = null;
+  let rate_per_share: number | null = null;
+  let yield_percent: number | null = null;
+  if (["dividendo", "jcp", "rendimento"].includes(input.type)) {
+    const { data: inv } = await supabase
+      .from("investments")
+      .select("quantity, last_quote, average_price")
+      .eq("id", input.investment_id)
+      .maybeSingle();
+    const q = Number(inv?.quantity ?? 0);
+    if (q > 0) {
+      quantity = q;
+      rate_per_share = amount / q;
+      const price = Number(inv?.last_quote ?? inv?.average_price ?? 0);
+      if (price > 0) yield_percent = (rate_per_share / price) * 100;
+    }
+  }
+
   const { error: itError } = await supabase.from("investment_transactions").insert({
     user_id,
     investment_id: input.investment_id,
@@ -235,6 +253,9 @@ async function executeInvestmentMove(input: InvestmentMoveInput) {
     amount,
     date: input.date,
     ir_type: input.ir_type,
+    quantity,
+    rate_per_share,
+    yield_percent,
   });
   fail(itError);
 
