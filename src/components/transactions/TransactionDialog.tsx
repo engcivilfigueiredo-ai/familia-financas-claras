@@ -60,7 +60,14 @@ interface Category {
 interface Investment {
   id: string;
   name: string;
+  ticker?: string | null;
+  quantity?: number | null;
+  last_quote?: number | null;
+  average_price?: number | null;
+  type?: string;
 }
+
+const PROVENTO_TYPES = ["dividendo", "jcp", "rendimento"];
 
 export interface EditingTransaction {
   id: string;
@@ -572,25 +579,19 @@ export function TransactionDialog({
 
           {kind === "investimento" ? (
             <>
-              <div className="grid gap-2">
-                <Label>Investimento</Label>
-                <Select value={investmentId} onValueChange={setInvestmentId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(investments.data ?? []).map((i) => (
-                      <SelectItem key={i.id} value={i.id}>
-                        {i.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-2">
                   <Label>Movimento</Label>
-                  <Select value={moveType} onValueChange={setMoveType}>
+                  <Select
+                    value={moveType}
+                    onValueChange={(v) => {
+                      setMoveType(v);
+                      if (PROVENTO_TYPES.includes(v)) {
+                        const cur = (investments.data ?? []).find((i) => i.id === investmentId);
+                        if (cur && !(Number(cur.quantity ?? 0) > 0)) setInvestmentId(NONE);
+                      }
+                    }}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -620,6 +621,70 @@ export function TransactionDialog({
                   </Select>
                 </div>
               </div>
+              {(() => {
+                const isProv = PROVENTO_TYPES.includes(moveType);
+                const list = (investments.data ?? []).filter(
+                  (i) => !isProv || Number(i.quantity ?? 0) > 0,
+                );
+                const sel = list.find((i) => i.id === investmentId);
+                const q = Number(sel?.quantity ?? 0);
+                const price = Number(sel?.last_quote ?? sel?.average_price ?? 0);
+                const perShare = q > 0 && value > 0 ? value / q : 0;
+                const yld = price > 0 ? (perShare / price) * 100 : 0;
+                const brl = (n: number, d = 2) =>
+                  n.toLocaleString("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                    minimumFractionDigits: d,
+                    maximumFractionDigits: d,
+                  });
+                return (
+                  <>
+                    <div className="grid gap-2">
+                      <Label>{isProv ? "Ativo da carteira (ação/FII/ETF)" : "Investimento"}</Label>
+                      <Select value={investmentId} onValueChange={setInvestmentId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {list.map((i) => (
+                            <SelectItem key={i.id} value={i.id}>
+                              {i.ticker ? `${i.ticker} - ${i.name}` : i.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {isProv && list.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          Nenhum ativo com cotas cadastradas na carteira.
+                        </p>
+                      ) : null}
+                    </div>
+                    {isProv && sel ? (
+                      <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/40 p-3 text-xs sm:grid-cols-4">
+                        <div>
+                          <p className="text-muted-foreground">Cotas</p>
+                          <p className="font-semibold">{q.toLocaleString("pt-BR")}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Cotação</p>
+                          <p className="font-semibold">{price > 0 ? brl(price) : "-"}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Valor por cota</p>
+                          <p className="font-semibold">{perShare > 0 ? brl(perShare, 4) : "-"}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Yield</p>
+                          <p className="font-semibold text-chart-2">
+                            {yld > 0 ? `${yld.toFixed(2).replace(".", ",")}%` : "-"}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                );
+              })()}
               <div className="grid gap-2">
                 <Label>Conta vinculada</Label>
                 <Select value={accountId} onValueChange={setAccountId}>
