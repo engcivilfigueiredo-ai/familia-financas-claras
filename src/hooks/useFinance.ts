@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { fetchAllRows } from "@/lib/pagination";
 
 export type TableName =
   | "family_members"
@@ -37,17 +38,28 @@ const ORDER: Partial<Record<TableName, { column: string; ascending: boolean }>> 
   projects: { column: "project_number", ascending: true },
 };
 
+/**
+ * Lê todas as linhas de uma tabela. O Supabase corta em 1.000 linhas por consulta e, sem a
+ * paginação, saldos e relatórios (somados no navegador) ficariam errados em silêncio depois do
+ * 1.000º lançamento.
+ */
+export async function fetchTable<T = Record<string, unknown>>(table: TableName): Promise<T[]> {
+  const order = ORDER[table];
+  return fetchAllRows<T>(async (from, to) => {
+    const base = supabase.from(table);
+    let query = from === 0 ? base.select("*", { count: "exact" }) : base.select("*");
+    if (order) query = query.order(order.column, { ascending: order.ascending });
+    // Desempate por id: sem ele, linhas com a mesma data podem repetir ou sumir entre páginas.
+    const { data, error, count } = await query.order("id", { ascending: true }).range(from, to);
+    if (error) throw new Error(error.message);
+    return { rows: (data ?? []) as T[], total: count ?? null };
+  });
+}
+
 export function useTable<T = Record<string, unknown>>(table: TableName) {
   return useQuery({
     queryKey: [table],
-    queryFn: async (): Promise<T[]> => {
-      const order = ORDER[table];
-      let query = supabase.from(table).select("*");
-      if (order) query = query.order(order.column, { ascending: order.ascending });
-      const { data, error } = await query;
-      if (error) throw new Error(error.message);
-      return (data ?? []) as T[];
-    },
+    queryFn: () => fetchTable<T>(table),
   });
 }
 
