@@ -41,7 +41,7 @@ export const Route = createFileRoute("/api/public/hooks/update-quotes")({
         if (error) return Response.json({ ok: false, error: error.message }, { status: 500 });
 
         const tickers = [...new Set((rows ?? []).map((r) => String(r.ticker).trim().toUpperCase()))]
-          .filter((t) => /^[A-Z0-9.\-]{3,12}$/.test(t))
+          .filter((t) => /^[A-Z0-9.-]{3,12}$/.test(t))
           .slice(0, MAX_TICKERS);
         const token = process.env["BRAPI_TOKEN"];
         const prices = new Map<string, number>();

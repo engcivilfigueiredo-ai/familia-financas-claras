@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AuthenticatedAPagarRouteImport } from './routes/_authenticated/a-pagar'
 import { Route as AuthenticatedAReceberRouteImport } from './routes/_authenticated/a-receber'
 import { Route as AuthenticatedBfEngenhariaRouteImport } from './routes/_authenticated/bf-engenharia'
@@ -42,6 +43,11 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAPagarRoute = AuthenticatedAPagarRouteImport.update({
@@ -139,6 +145,7 @@ const ApiPublicHooksUpdateQuotesRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/a-pagar': typeof AuthenticatedAPagarRoute
   '/a-receber': typeof AuthenticatedAReceberRoute
   '/bf-engenharia': typeof AuthenticatedBfEngenhariaRoute
@@ -160,6 +167,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/a-pagar': typeof AuthenticatedAPagarRoute
   '/a-receber': typeof AuthenticatedAReceberRoute
   '/bf-engenharia': typeof AuthenticatedBfEngenhariaRoute
@@ -183,6 +191,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/_authenticated/a-pagar': typeof AuthenticatedAPagarRoute
   '/_authenticated/a-receber': typeof AuthenticatedAReceberRoute
   '/_authenticated/bf-engenharia': typeof AuthenticatedBfEngenhariaRoute
@@ -206,6 +215,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/reset-password'
     | '/a-pagar'
     | '/a-receber'
     | '/bf-engenharia'
@@ -227,6 +237,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/reset-password'
     | '/a-pagar'
     | '/a-receber'
     | '/bf-engenharia'
@@ -249,6 +260,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/reset-password'
     | '/_authenticated/a-pagar'
     | '/_authenticated/a-receber'
     | '/_authenticated/bf-engenharia'
@@ -272,6 +284,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   ApiPublicHooksUpdateQuotesRoute: typeof ApiPublicHooksUpdateQuotesRoute
 }
 
@@ -296,6 +309,13 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/a-pagar': {
@@ -465,6 +485,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   ApiPublicHooksUpdateQuotesRoute: ApiPublicHooksUpdateQuotesRoute,
 }
 export const routeTree = rootRouteImport

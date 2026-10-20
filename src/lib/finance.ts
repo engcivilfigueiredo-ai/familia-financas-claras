@@ -1,4 +1,4 @@
-import { addMonths, monthStart, parseISO, toISO } from "./format";
+import { addMonths, monthStart, parseISO, toISO, todayISO } from "./format";
 
 export type TxType = "receita" | "despesa" | "transferencia";
 
@@ -78,12 +78,17 @@ export function invoiceDueDate(
   return toISO(new Date(target.getFullYear(), target.getMonth(), Math.min(dueDay, last)));
 }
 
-/** Rule: transfer legs are stored signed (negative = out, positive = in). */
-export function accountBalance(account: AccountRow, txs: Tx[]): number {
+/**
+ * Rule: transfer legs are stored signed (negative = out, positive = in).
+ * Saldo atual: só conta lançamentos pagos com data até `asOf` (padrão: hoje), para que
+ * lançamentos futuros (ex.: aportes e recorrências geradas) não mexam no saldo antes da hora.
+ */
+export function accountBalance(account: AccountRow, txs: Tx[], asOf: string = todayISO()): number {
   let balance = Number(account.initial_balance ?? 0);
   for (const t of txs) {
     if (t.account_id !== account.id) continue;
     if (t.status !== "pago") continue;
+    if (t.date > asOf) continue;
     if (t.type === "receita") balance += Number(t.amount);
     else if (t.type === "despesa") {
       if (!t.credit_card_id) balance -= Number(t.amount);
@@ -286,6 +291,28 @@ export const LIABILITY_TYPES = [
   "outros",
 ] as const;
 
+/**
+ * Data da n-ésima ocorrência (index 0 = data inicial), sempre calculada a partir da data
+ * inicial. Encadear addFrequency acumula erro: 31/jan -> 03/mar -> 03/abr...
+ * Aqui 31/jan gera 28/fev, 31/mar, 30/abr, 31/mai...
+ */
+export function recurrenceDate(startISO: string, frequency: string, index: number): string {
+  const start = parseISO(startISO);
+  const monthStep: Record<string, number> = {
+    mensal: 1,
+    bimestral: 2,
+    trimestral: 3,
+    semestral: 6,
+    anual: 12,
+  };
+  if (frequency === "semanal" || frequency === "quinzenal") {
+    const days = frequency === "semanal" ? 7 : 15;
+    return toISO(new Date(start.getFullYear(), start.getMonth(), start.getDate() + days * index));
+  }
+  return addMonths(startISO, (monthStep[frequency] ?? 1) * index);
+}
+
+/** @deprecated Encadeado (acumula erro em dias 29-31). Use recurrenceDate. */
 export function addFrequency(iso: string, frequency: string): string {
   const d = parseISO(iso);
   switch (frequency) {

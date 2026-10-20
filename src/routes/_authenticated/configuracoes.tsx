@@ -107,7 +107,7 @@ function ConfiguracoesPage() {
     mutationFn: async () => {
       if (!user?.email) throw new Error("E-mail indisponível.");
       const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
-        redirectTo: `${window.location.origin}/auth`,
+        redirectTo: `${window.location.origin}/reset-password`,
       });
       if (error) throw new Error(error.message);
     },

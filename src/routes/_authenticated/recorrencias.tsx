@@ -34,7 +34,7 @@ import { ConfirmDelete } from "@/components/shared/confirm-delete";
 import { useInvalidateFinance, useRemove, useTable, useUpsert } from "@/hooks/useFinance";
 import { useScope } from "@/hooks/useScope";
 import { deleteFutureRecurringOccurrences, materializeRecurring } from "@/lib/transactions";
-import { RECURRENCE_FREQUENCIES, addFrequency, type Tx } from "@/lib/finance";
+import { RECURRENCE_FREQUENCIES, recurrenceDate, type Tx } from "@/lib/finance";
 import { addMonths, formatBRL, formatDateBR, parseCurrencyInput, todayISO } from "@/lib/format";
 import { toast } from "sonner";
 
@@ -174,13 +174,11 @@ function RecorrenciasPage() {
   function occurrences(row: RecurringRow, skip: Set<string>) {
     const horizon = addMonths(todayISO(), 3);
     const dates: string[] = [];
-    let cursor = row.start_date;
-    let guard = 0;
-    while (cursor <= horizon && guard < 200) {
-      if (row.end_date && cursor > row.end_date) break;
-      if (!skip.has(cursor)) dates.push(cursor);
-      cursor = addFrequency(cursor, row.frequency);
-      guard += 1;
+    for (let index = 0; index < 200; index += 1) {
+      const date = recurrenceDate(row.start_date, row.frequency, index);
+      if (date > horizon) break;
+      if (row.end_date && date > row.end_date) break;
+      if (!skip.has(date)) dates.push(date);
     }
     return dates;
   }
@@ -202,7 +200,8 @@ function RecorrenciasPage() {
         dates,
       );
       invalidate();
-      toast.success(`${created} lançamento(s) gerado(s).`);
+      if (created === 0) toast.info("Nenhum aporte vencido para registrar ainda.");
+      else toast.success(`${created} lançamento(s) gerado(s).`);
     } catch (error) {
       toast.error((error as Error).message);
     } finally {

@@ -84,9 +84,12 @@ export function monthStart(date: Date | string): string {
   return toISO(new Date(d.getFullYear(), d.getMonth(), 1));
 }
 
+/** Soma meses mantendo o dia, ou o último dia do mês quando ele não existe (31/jan + 1 = 28/fev). */
 export function addMonths(iso: string, months: number): string {
   const d = parseISO(iso);
-  return toISO(new Date(d.getFullYear(), d.getMonth() + months, d.getDate()));
+  const target = new Date(d.getFullYear(), d.getMonth() + months, 1);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  return toISO(new Date(target.getFullYear(), target.getMonth(), Math.min(d.getDate(), lastDay)));
 }
 
 export function daysBetween(fromISO: string, toISODate: string): number {

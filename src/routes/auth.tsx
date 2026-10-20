@@ -69,7 +69,7 @@ function AuthPage() {
         navigate({ to: "/dashboard", replace: true });
       } else {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/auth`,
+          redirectTo: `${window.location.origin}/reset-password`,
         });
         if (error) throw error;
         toast.success("Enviamos um e-mail com o link para redefinir sua senha.");

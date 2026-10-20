@@ -221,6 +221,8 @@ export interface InvestmentMoveInput {
   ir_type: string | null;
   family_member_id: string | null;
   investment_name: string;
+  /** Quando o aporte vem de uma recorrência, liga a transferência a ela (evita duplicar). */
+  recurring_id?: string | null;
 }
 
 async function executeInvestmentMove(input: InvestmentMoveInput) {
@@ -284,6 +286,8 @@ async function executeInvestmentMove(input: InvestmentMoveInput) {
         status: "pago",
         payment_method: "transferência",
         transfer_group_id: crypto.randomUUID(),
+        is_recurring: Boolean(input.recurring_id),
+        recurring_id: input.recurring_id ?? null,
         tags: [],
       });
       fail(error);
@@ -367,7 +371,11 @@ export interface RecurringForMaterialize {
 /** Rule 7 helper: generates recurring transactions up to a horizon. */
 export async function materializeRecurring(recurring: RecurringForMaterialize, dates: string[]) {
   if (recurring.is_investment_contribution && recurring.investment_id) {
-    for (const date of dates) {
+    // Aporte mexe no saldo da conta e no valor investido na hora. Por isso só registramos
+    // os vencidos (data <= hoje); os futuros são gerados quando chegar a data.
+    const today = toISO(new Date());
+    const due = dates.filter((date) => date <= today);
+    for (const date of due) {
       await executeInvestmentMove({
         investment_id: recurring.investment_id,
         account_id: recurring.account_id,
@@ -377,9 +385,10 @@ export async function materializeRecurring(recurring: RecurringForMaterialize, d
         ir_type: null,
         family_member_id: recurring.family_member_id,
         investment_name: recurring.investment_name ?? recurring.description,
+        recurring_id: recurring.id,
       });
     }
-    return dates.length;
+    return due.length;
   }
 
   const user_id = await uid();

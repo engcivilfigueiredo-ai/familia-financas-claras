@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export interface Quote {
   symbol: string;
@@ -19,12 +20,16 @@ export function normalizeTicker(raw: string): string {
   return raw.trim().toUpperCase().replace(/\s+/g, "");
 }
 
-/** Busca cotações atuais (B3 / cripto) para uma lista de tickers. */
+/**
+ * Busca cotações atuais (B3 / cripto) para uma lista de tickers.
+ * Exige usuário logado: sem isso qualquer pessoa consumiria a cota do BRAPI_TOKEN.
+ */
 export const getQuotes = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((data: { tickers: string[] }) => ({
     tickers: (data?.tickers ?? [])
       .map((t) => String(t).trim().toUpperCase())
-      .filter((t) => /^[A-Z0-9.\-]{3,12}$/.test(t))
+      .filter((t) => /^[A-Z0-9.-]{3,12}$/.test(t))
       .slice(0, 25),
   }))
   .handler(async ({ data }): Promise<Quote[]> => {
