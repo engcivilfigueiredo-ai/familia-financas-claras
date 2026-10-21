@@ -1072,7 +1072,25 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_installment_purchase: {
+        Args: { p_invoices: Json; p_parent: Json; p_rows: Json }
+        Returns: string
+      }
       next_project_number: { Args: never; Returns: string }
+      register_investment_move: {
+        Args: {
+          p_account_id?: string
+          p_amount: number
+          p_date: string
+          p_family_member_id?: string
+          p_investment_id: string
+          p_investment_name: string
+          p_ir_type?: string
+          p_recurring_id?: string
+          p_type: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

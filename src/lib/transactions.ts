@@ -1,6 +1,10 @@
 import { supabase } from "@/integrations/supabase/client";
-import { addMonths, monthStart, toISO, parseISO } from "./format";
+import type { Database } from "@/integrations/supabase/types";
+import { toISO, parseISO } from "./format";
 import { invoiceMonthFor, invoiceClosingDate, invoiceDueDate } from "./finance";
+import { planInstallmentPurchase, type CardMeta, type InstallmentInput } from "./installment-plan";
+
+export type { CardMeta, InstallmentInput } from "./installment-plan";
 
 async function uid(): Promise<string> {
   const { data, error } = await supabase.auth.getUser();
@@ -12,10 +16,16 @@ function fail(error: { message: string } | null) {
   if (error) throw new Error(error.message);
 }
 
-export interface CardMeta {
-  id: string;
-  closing_day: number;
-  due_day: number;
+/** Erro de chamada RPC; se a função não existe, o banco ainda não recebeu a atualização. */
+function failRpc(error: { message: string; code?: string } | null) {
+  if (!error) return;
+  if (error.code === "PGRST202" || /could not find the function/i.test(error.message)) {
+    throw new Error(
+      "O banco ainda não recebeu a atualização do Lote 2. Rode o SQL da migração " +
+        "20261020120000_atomic_installments_and_investment_moves e tente de novo.",
+    );
+  }
+  throw new Error(error.message);
 }
 
 async function ensureInvoice(user_id: string, card: CardMeta, referenceMonth: string) {
@@ -88,67 +98,20 @@ export async function saveSimpleTransaction(input: SimpleTxInput, card?: CardMet
   return data?.id as string;
 }
 
-export interface InstallmentInput {
-  purchase_description: string;
-  total_amount: number;
-  installment_count: number;
-  credit_card_id: string;
-  category_id: string | null;
-  family_member_id: string | null;
-  purchase_date: string;
-  notes: string | null;
-  tags: string[];
-}
-
-/** Rule 3: generate every installment as an individual transaction. */
+/**
+ * Rule 3: cada parcela vira um lançamento. O plano é calculado aqui (testado em
+ * installment-plan.ts) e o banco grava cabeçalho, faturas e parcelas numa única transação:
+ * ou entra tudo, ou nada.
+ */
 export async function createInstallmentPurchase(input: InstallmentInput, card: CardMeta) {
-  const user_id = await uid();
-  const { data: parent, error } = await supabase
-    .from("installments")
-    .insert({
-      user_id,
-      purchase_description: input.purchase_description,
-      total_amount: input.total_amount,
-      installment_count: input.installment_count,
-      credit_card_id: input.credit_card_id,
-      category_id: input.category_id,
-      family_member_id: input.family_member_id,
-      purchase_date: input.purchase_date,
-    })
-    .select("id")
-    .single();
-  fail(error);
-
-  const base = Math.floor((input.total_amount * 100) / input.installment_count) / 100;
-  const remainder = Number((input.total_amount - base * input.installment_count).toFixed(2));
-  const firstInvoice = invoiceMonthFor(input.purchase_date, card.closing_day);
-
-  const rows = [];
-  for (let i = 0; i < input.installment_count; i += 1) {
-    const invoice_month = monthStart(addMonths(firstInvoice, i));
-    await ensureInvoice(user_id, card, invoice_month);
-    const amount = i === 0 ? Number((base + remainder).toFixed(2)) : base;
-    rows.push({
-      user_id,
-      type: "despesa",
-      description: `${input.purchase_description} (${i + 1}/${input.installment_count})`,
-      amount,
-      date: i === 0 ? input.purchase_date : invoice_month,
-      category_id: input.category_id,
-      credit_card_id: input.credit_card_id,
-      family_member_id: input.family_member_id,
-      payment_method: "crédito",
-      status: "pendente",
-      installment_id: parent?.id ?? null,
-      installment_number: i + 1,
-      invoice_month,
-      notes: input.notes,
-      tags: input.tags,
-    });
-  }
-  const { error: txError } = await supabase.from("transactions").insert(rows);
-  fail(txError);
-  return parent?.id as string;
+  const plan = planInstallmentPurchase(input, card);
+  const { data, error } = await supabase.rpc("create_installment_purchase", {
+    p_parent: plan.parent,
+    p_invoices: plan.invoices,
+    p_rows: plan.rows,
+  });
+  failRpc(error);
+  return data as string;
 }
 
 export interface TransferInput {
@@ -225,122 +188,26 @@ export interface InvestmentMoveInput {
   recurring_id?: string | null;
 }
 
+/**
+ * Rules 5 & 6, executadas no banco (register_investment_move): grava o movimento, o lançamento
+ * de caixa e os novos valores do investimento numa transação só, travando a linha do
+ * investimento para que dois aportes simultâneos não sobrescrevam um ao outro.
+ */
 async function executeInvestmentMove(input: InvestmentMoveInput) {
-  const user_id = await uid();
-  const amount = Math.abs(input.amount);
-
-  let quantity: number | null = null;
-  let rate_per_share: number | null = null;
-  let yield_percent: number | null = null;
-  if (["dividendo", "jcp", "rendimento"].includes(input.type)) {
-    const { data: inv } = await supabase
-      .from("investments")
-      .select("quantity, last_quote, average_price")
-      .eq("id", input.investment_id)
-      .maybeSingle();
-    const q = Number(inv?.quantity ?? 0);
-    if (q > 0) {
-      quantity = q;
-      rate_per_share = amount / q;
-      const price = Number(inv?.last_quote ?? inv?.average_price ?? 0);
-      if (price > 0) yield_percent = (rate_per_share / price) * 100;
-    }
-  }
-
-  const { error: itError } = await supabase.from("investment_transactions").insert({
-    user_id,
-    investment_id: input.investment_id,
-    account_id: input.account_id,
-    type: input.type,
-    amount,
-    date: input.date,
-    ir_type: input.ir_type,
-    quantity,
-    rate_per_share,
-    yield_percent,
-  });
-  fail(itError);
-
-  const { data: inv, error: invError } = await supabase
-    .from("investments")
-    .select("invested_amount, current_amount")
-    .eq("id", input.investment_id)
-    .single();
-  fail(invError);
-
-  let invested = Number(inv?.invested_amount ?? 0);
-  let current = Number(inv?.current_amount ?? 0);
-
-  if (input.type === "aplicação") {
-    invested += amount;
-    current += amount;
-    if (input.account_id) {
-      const { error } = await supabase.from("transactions").insert({
-        user_id,
-        type: "transferencia",
-        description: `Aporte em ${input.investment_name}`,
-        amount: -amount,
-        date: input.date,
-        account_id: input.account_id,
-        family_member_id: input.family_member_id,
-        status: "pago",
-        payment_method: "transferência",
-        transfer_group_id: crypto.randomUUID(),
-        is_recurring: Boolean(input.recurring_id),
-        recurring_id: input.recurring_id ?? null,
-        tags: [],
-      });
-      fail(error);
-    }
-  } else if (input.type === "resgate") {
-    invested = Math.max(invested - amount, 0);
-    current = Math.max(current - amount, 0);
-    if (input.account_id) {
-      const { error } = await supabase.from("transactions").insert({
-        user_id,
-        type: "transferencia",
-        description: `Resgate de ${input.investment_name}`,
-        amount,
-        date: input.date,
-        account_id: input.account_id,
-        family_member_id: input.family_member_id,
-        status: "pago",
-        payment_method: "transferência",
-        transfer_group_id: crypto.randomUUID(),
-        tags: [],
-      });
-      fail(error);
-    }
-  } else {
-    // rendimento / dividendo / jcp -> receita no fluxo de caixa
-    current += amount;
-    const { data: cat } = await supabase
-      .from("categories")
-      .select("id")
-      .eq("type", "receita")
-      .in("name", input.type === "dividendo" ? ["Dividendos"] : ["Rendimentos"])
-      .limit(1);
-    const { error } = await supabase.from("transactions").insert({
-      user_id,
-      type: "receita",
-      description: `${input.type === "jcp" ? "JCP" : input.type === "dividendo" ? "Dividendo" : "Rendimento"} - ${input.investment_name}`,
-      amount,
-      date: input.date,
-      account_id: input.account_id,
-      category_id: cat?.[0]?.id ?? null,
-      family_member_id: input.family_member_id,
-      status: "pago",
-      notes: input.ir_type ? `IR: ${input.ir_type}` : null,
-      tags: [],
-    });
-    fail(error);
-  }
-
-  const { error: updError } = await supabase
-    .from("investments")
-    .update({ invested_amount: invested, current_amount: current })
-    .eq("id", input.investment_id);
-  fail(updError);
+  type Args = Database["public"]["Functions"]["register_investment_move"]["Args"];
+  const args: Args = {
+    p_investment_id: input.investment_id,
+    p_type: input.type,
+    p_amount: Math.abs(input.amount),
+    p_date: input.date,
+    p_investment_name: input.investment_name,
+    ...(input.account_id ? { p_account_id: input.account_id } : {}),
+    ...(input.ir_type ? { p_ir_type: input.ir_type } : {}),
+    ...(input.family_member_id ? { p_family_member_id: input.family_member_id } : {}),
+    ...(input.recurring_id ? { p_recurring_id: input.recurring_id } : {}),
+  };
+  const { error } = await supabase.rpc("register_investment_move", args);
+  failRpc(error);
 }
 
 /**
