@@ -1086,8 +1086,10 @@ export type Database = {
           p_investment_id: string
           p_investment_name: string
           p_ir_type?: string
+          p_quantity?: number
           p_recurring_id?: string
           p_type: string
+          p_unit_price?: number
         }
         Returns: undefined
       }

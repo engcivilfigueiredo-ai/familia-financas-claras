@@ -10,15 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  ArrowDownUp,
-  Pencil,
-  PiggyBank,
-  Plus,
-  RefreshCw,
-  Trash2,
-  TrendingUp,
-} from "lucide-react";
+import { ArrowDownUp, Pencil, PiggyBank, Plus, RefreshCw, Trash2, TrendingUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { getQuotes, isQuoted, normalizeTicker } from "@/lib/quotes.functions";
 import { Button } from "@/components/ui/button";
@@ -63,16 +55,30 @@ import {
   RECURRENCE_FREQUENCIES,
   TAX_REGIMES,
 } from "@/lib/finance";
-import { formatBRL, formatDateBR, formatPercent, parseCurrencyInput, todayISO } from "@/lib/format";
+import {
+  formatBRL,
+  formatDateBR,
+  formatPercent,
+  parseCurrencyInput,
+  parseDecimalInput,
+  todayISO,
+} from "@/lib/format";
+import { applyBuy, applySell, positionOf, tradeTotal } from "@/lib/position";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/investimentos")({
   head: () => ({
     meta: [
       { title: "Investimentos | Controle Financeiro Família" },
-      { name: "description", content: "Carteira de investimentos, aportes, resgates e rendimentos." },
+      {
+        name: "description",
+        content: "Carteira de investimentos, aportes, resgates e rendimentos.",
+      },
       { property: "og:title", content: "Investimentos | Controle Financeiro Família" },
-      { property: "og:description", content: "Carteira de investimentos, aportes, resgates e rendimentos." },
+      {
+        property: "og:description",
+        content: "Carteira de investimentos, aportes, resgates e rendimentos.",
+      },
     ],
   }),
   component: InvestimentosPage,
@@ -147,6 +153,8 @@ const emptyMove = {
   account_id: NONE,
   type: "aplicação" as (typeof INVESTMENT_TX_TYPES)[number],
   amount: "",
+  quantity: "",
+  unit_price: "",
   date: todayISO(),
   ir_type: NONE,
 };
@@ -279,9 +287,7 @@ function InvestimentosPage() {
   const [divFilter, setDivFilter] = useState<string>("__all__");
   const dividends = useMemo(() => {
     const all = (moves.data ?? []).filter(
-      (m) =>
-        invName.has(m.investment_id) &&
-        ["dividendo", "jcp", "rendimento"].includes(m.type),
+      (m) => invName.has(m.investment_id) && ["dividendo", "jcp", "rendimento"].includes(m.type),
     );
     const list = divFilter === "__all__" ? all : all.filter((m) => m.investment_id === divFilter);
     const year = String(new Date().getFullYear());
@@ -300,9 +306,7 @@ function InvestimentosPage() {
     return {
       list: [...list].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30),
       total: list.reduce((s, m) => s + Number(m.amount), 0),
-      year: list
-        .filter((m) => m.date.startsWith(year))
-        .reduce((s, m) => s + Number(m.amount), 0),
+      year: list.filter((m) => m.date.startsWith(year)).reduce((s, m) => s + Number(m.amount), 0),
       monthly,
       assets,
     };
@@ -473,12 +477,58 @@ function InvestimentosPage() {
   }
 
   function openMove(row: InvestmentRow) {
-    setMove({ ...emptyMove, investment_id: row.id });
+    // sugere a cotação atual como preço por cota (dá para editar)
+    const price = row.ticker
+      ? (quoteMap.get(normalizeTicker(row.ticker))?.price ?? row.last_quote)
+      : row.last_quote;
+    setMove({
+      ...emptyMove,
+      investment_id: row.id,
+      unit_price: price ? String(price).replace(".", ",") : "",
+    });
     setMoveOpen(true);
   }
 
+  // Compra/venda de ações, FIIs, ETFs e cripto usam cotas e preço por cota.
+  const moveRow = rows.find((r) => r.id === move.investment_id);
+  const moveUsesQuotas = Boolean(
+    moveRow && isQuoted(moveRow.type) && (move.type === "aplicação" || move.type === "resgate"),
+  );
+  const moveQuantity = parseDecimalInput(move.quantity);
+  const moveUnitPrice = parseDecimalInput(move.unit_price);
+  const movePosition = moveRow ? positionOf(moveRow) : null;
+  const moveQuote = moveRow?.ticker
+    ? (quoteMap.get(normalizeTicker(moveRow.ticker))?.price ?? moveRow.last_quote ?? null)
+    : null;
+  let moveBuy: ReturnType<typeof applyBuy> | null = null;
+  let moveSell: ReturnType<typeof applySell> | null = null;
+  let movePreviewError: string | null = null;
+  if (moveUsesQuotas && movePosition && moveQuantity > 0 && moveUnitPrice > 0) {
+    try {
+      if (move.type === "aplicação") moveBuy = applyBuy(movePosition, moveQuantity, moveUnitPrice);
+      else moveSell = applySell(movePosition, moveQuantity, moveUnitPrice);
+    } catch (error) {
+      movePreviewError = (error as Error).message;
+    }
+  }
+
   async function saveMove() {
-    const amount = parseCurrencyInput(move.amount);
+    let amount = parseCurrencyInput(move.amount);
+    let quantity: number | null = null;
+    let unit_price: number | null = null;
+    if (moveUsesQuotas) {
+      if (moveQuantity <= 0 || moveUnitPrice <= 0) {
+        toast.error("Informe a quantidade de cotas e o preço por cota.");
+        return;
+      }
+      if (movePreviewError) {
+        toast.error(movePreviewError);
+        return;
+      }
+      quantity = moveQuantity;
+      unit_price = moveUnitPrice;
+      amount = tradeTotal(moveQuantity, moveUnitPrice);
+    }
     if (!move.investment_id || amount <= 0) {
       toast.error("Informe um valor válido.");
       return;
@@ -489,11 +539,12 @@ function InvestimentosPage() {
         investment_id: move.investment_id,
         account_id: move.account_id === NONE ? null : move.account_id,
         amount,
+        quantity,
+        unit_price,
         date: move.date,
         type: move.type,
         ir_type: move.ir_type === NONE ? null : move.ir_type,
-        family_member_id:
-          rows.find((r) => r.id === move.investment_id)?.family_member_id ?? null,
+        family_member_id: rows.find((r) => r.id === move.investment_id)?.family_member_id ?? null,
         investment_name: invName.get(move.investment_id) ?? "Investimento",
       });
       invalidate();
@@ -519,9 +570,7 @@ function InvestimentosPage() {
                 onClick={() => quotes.refetch()}
                 disabled={quotes.isFetching}
               >
-                <RefreshCw
-                  className={`mr-2 h-4 w-4 ${quotes.isFetching ? "animate-spin" : ""}`}
-                />
+                <RefreshCw className={`mr-2 h-4 w-4 ${quotes.isFetching ? "animate-spin" : ""}`} />
                 Atualizar cotações
               </Button>
             ) : null}
@@ -689,7 +738,7 @@ function InvestimentosPage() {
                       <Badge variant="outline">{m.type}</Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {m.account_id ? accName.get(m.account_id) ?? "-" : "-"}
+                      {m.account_id ? (accName.get(m.account_id) ?? "-") : "-"}
                     </TableCell>
                     <TableCell className="text-right font-semibold">
                       {formatBRL(Number(m.amount))}
@@ -979,7 +1028,12 @@ function InvestimentosPage() {
                   <XAxis dataKey="label" fontSize={11} />
                   <YAxis fontSize={11} tickFormatter={(v) => `R$${v}`} width={60} />
                   <RTooltip formatter={(v: number) => formatBRL(Number(v))} />
-                  <Bar dataKey="total" name="Proventos" fill="var(--color-chart-2)" radius={[4, 4, 0, 0]} />
+                  <Bar
+                    dataKey="total"
+                    name="Proventos"
+                    fill="var(--color-chart-2)"
+                    radius={[4, 4, 0, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -1068,16 +1122,133 @@ function InvestimentosPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="mv-amount">Valor</Label>
-              <Input
-                id="mv-amount"
-                value={move.amount}
-                onChange={(e) => setMove({ ...move, amount: e.target.value })}
-                inputMode="decimal"
-                placeholder="0,00"
-              />
-            </div>
+            {moveUsesQuotas ? (
+              <>
+                {movePosition ? (
+                  <p className="text-xs text-muted-foreground">
+                    Posição atual: {movePosition.quantity.toLocaleString("pt-BR")} cotas · preço
+                    médio {formatBRL(movePosition.average_price)}
+                    {moveQuote ? ` · cotação ${formatBRL(moveQuote)}` : ""}
+                  </p>
+                ) : null}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-2">
+                    <Label htmlFor="mv-quantity">
+                      {move.type === "aplicação" ? "Cotas compradas" : "Cotas vendidas"}
+                    </Label>
+                    <Input
+                      id="mv-quantity"
+                      value={move.quantity}
+                      onChange={(e) => setMove({ ...move, quantity: e.target.value })}
+                      inputMode="decimal"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="mv-unit-price">
+                      {move.type === "aplicação"
+                        ? "Preço pago por cota"
+                        : "Preço de venda por cota"}
+                    </Label>
+                    <Input
+                      id="mv-unit-price"
+                      value={move.unit_price}
+                      onChange={(e) => setMove({ ...move, unit_price: e.target.value })}
+                      inputMode="decimal"
+                      placeholder="0,00"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Use vírgula para decimais (ex.: 0,005 ou 24,20).
+                </p>
+                {movePreviewError ? (
+                  <p className="text-sm text-destructive">{movePreviewError}</p>
+                ) : null}
+                {moveBuy ? (
+                  <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
+                    <div className="flex justify-between">
+                      <span>Valor total</span>
+                      <strong>{formatBRL(moveBuy.total)}</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Nova quantidade</span>
+                      <span>{moveBuy.quantity.toLocaleString("pt-BR")} cotas</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Novo preço médio</span>
+                      <span>
+                        {formatBRL(moveBuy.average_price)}
+                        {movePosition && movePosition.quantity > 0
+                          ? ` (antes ${formatBRL(movePosition.average_price)})`
+                          : ""}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Total investido</span>
+                      <span>{formatBRL(moveBuy.invested)}</span>
+                    </div>
+                    {moveQuote ? (
+                      <div className="flex justify-between">
+                        <span>Resultado na cotação atual</span>
+                        <span
+                          className={
+                            moveQuote * moveBuy.quantity - moveBuy.invested >= 0
+                              ? "text-emerald-600"
+                              : "text-destructive"
+                          }
+                        >
+                          {formatBRL(moveQuote * moveBuy.quantity - moveBuy.invested)} (
+                          {formatPercent(
+                            moveBuy.invested > 0
+                              ? ((moveQuote * moveBuy.quantity - moveBuy.invested) /
+                                  moveBuy.invested) *
+                                  100
+                              : 0,
+                          )}
+                          )
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                {moveSell ? (
+                  <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
+                    <div className="flex justify-between">
+                      <span>Valor recebido</span>
+                      <strong>{formatBRL(moveSell.total)}</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Custo das cotas vendidas</span>
+                      <span>{formatBRL(moveSell.cost_basis)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Resultado da venda</span>
+                      <span
+                        className={moveSell.realized >= 0 ? "text-emerald-600" : "text-destructive"}
+                      >
+                        {formatBRL(moveSell.realized)} ({formatPercent(moveSell.realized_pct)})
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Cotas restantes</span>
+                      <span>{moveSell.quantity.toLocaleString("pt-BR")}</span>
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <div className="grid gap-2">
+                <Label htmlFor="mv-amount">Valor</Label>
+                <Input
+                  id="mv-amount"
+                  value={move.amount}
+                  onChange={(e) => setMove({ ...move, amount: e.target.value })}
+                  inputMode="decimal"
+                  placeholder="0,00"
+                />
+              </div>
+            )}
             <div className="grid gap-2">
               <Label htmlFor="mv-date">Data</Label>
               <Input
@@ -1124,7 +1295,8 @@ function InvestimentosPage() {
             </div>
             <p className="text-xs text-muted-foreground">
               Aportes e resgates são registrados como transferência (não afetam receitas/despesas).
-              Rendimentos, dividendos e JCP entram como receita.
+              Rendimentos, dividendos e JCP entram como receita. Em ações, FIIs, ETFs e cripto, a
+              compra e a venda atualizam as cotas e o preço médio.
             </p>
           </div>
           <DialogFooter>

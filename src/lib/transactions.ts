@@ -21,8 +21,8 @@ function failRpc(error: { message: string; code?: string } | null) {
   if (!error) return;
   if (error.code === "PGRST202" || /could not find the function/i.test(error.message)) {
     throw new Error(
-      "O banco ainda não recebeu a atualização do Lote 2. Rode o SQL da migração " +
-        "20261020120000_atomic_installments_and_investment_moves e tente de novo.",
+      "O banco ainda não recebeu a atualização mais recente. Rode o SQL pendente da pasta " +
+        "supabase/migrations (a mais nova) e tente de novo.",
     );
   }
   throw new Error(error.message);
@@ -186,6 +186,9 @@ export interface InvestmentMoveInput {
   investment_name: string;
   /** Quando o aporte vem de uma recorrência, liga a transferência a ela (evita duplicar). */
   recurring_id?: string | null;
+  /** Ações, FIIs, ETFs e cripto: cotas e preço por cota da compra/venda. */
+  quantity?: number | null;
+  unit_price?: number | null;
 }
 
 /**
@@ -205,6 +208,8 @@ async function executeInvestmentMove(input: InvestmentMoveInput) {
     ...(input.ir_type ? { p_ir_type: input.ir_type } : {}),
     ...(input.family_member_id ? { p_family_member_id: input.family_member_id } : {}),
     ...(input.recurring_id ? { p_recurring_id: input.recurring_id } : {}),
+    ...(input.quantity ? { p_quantity: input.quantity } : {}),
+    ...(input.unit_price ? { p_unit_price: input.unit_price } : {}),
   };
   const { error } = await supabase.rpc("register_investment_move", args);
   failRpc(error);

@@ -79,6 +79,22 @@ export function parseCurrencyInput(input: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/**
+ * Número digitado em pt-BR para quantidades e preços unitários.
+ * - Com vírgula: a vírgula é o decimal e os pontos são milhar ("1.234,56" -> 1234.56).
+ * - Só com ponto: "1.000" e "12.345.678" são milhar; "0.001" e "25.5" são decimal.
+ */
+export function parseDecimalInput(input: string): number {
+  const s = (input ?? "").trim().replace(/[^\d.,-]/g, "");
+  if (!s) return 0;
+  let normalized: string;
+  if (s.includes(",")) normalized = s.replace(/\./g, "").replace(",", ".");
+  else if (/^-?[1-9]\d{0,2}(\.\d{3})+$/.test(s)) normalized = s.replace(/\./g, "");
+  else normalized = s;
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export function monthStart(date: Date | string): string {
   const d = typeof date === "string" ? parseISO(date) : date;
   return toISO(new Date(d.getFullYear(), d.getMonth(), 1));
