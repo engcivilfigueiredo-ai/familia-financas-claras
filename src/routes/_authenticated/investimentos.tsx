@@ -1,0 +1,1443 @@
+import { useEffect, useMemo, useState } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip as RTooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowDownUp, Pencil, PiggyBank, Plus, RefreshCw, Trash2, TrendingUp } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { getQuotes, isQuoted, normalizeTicker } from "@/lib/quotes.functions";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/shared/states";
+import { AllocationChart } from "@/components/shared/allocation-chart";
+import { ConfirmDelete } from "@/components/shared/confirm-delete";
+import { useInvalidateFinance, useRemove, useTable, useUpsert } from "@/hooks/useFinance";
+import { useScope } from "@/hooks/useScope";
+import { createInvestmentMove, materializeRecurring } from "@/lib/transactions";
+import {
+  INVESTMENT_TX_TYPES,
+  INVESTMENT_TYPES,
+  IR_TYPES,
+  PENSION_PLAN_TYPES,
+  RECURRENCE_FREQUENCIES,
+  TAX_REGIMES,
+} from "@/lib/finance";
+import {
+  formatBRL,
+  formatDateBR,
+  formatPercent,
+  parseCurrencyInput,
+  parseDecimalInput,
+  todayISO,
+} from "@/lib/format";
+import { applyBuy, applySell, positionOf, tradeTotal } from "@/lib/position";
+import { toast } from "sonner";
+
+export const Route = createFileRoute("/_authenticated/investimentos")({
+  head: () => ({
+    meta: [
+      { title: "Investimentos | Controle Financeiro Família" },
+      {
+        name: "description",
+        content: "Carteira de investimentos, aportes, resgates e rendimentos.",
+      },
+      { property: "og:title", content: "Investimentos | Controle Financeiro Família" },
+      {
+        property: "og:description",
+        content: "Carteira de investimentos, aportes, resgates e rendimentos.",
+      },
+    ],
+  }),
+  component: InvestimentosPage,
+});
+
+interface Named {
+  id: string;
+  name: string;
+}
+
+interface InvestmentRow {
+  id: string;
+  name: string;
+  institution: string | null;
+  type: string;
+  application_date: string;
+  invested_amount: number;
+  current_amount: number;
+  maturity_date: string | null;
+  liquidity: string | null;
+  status: string;
+  family_member_id: string | null;
+  ticker: string | null;
+  quantity: number | null;
+  average_price: number | null;
+  last_quote: number | null;
+  quote_updated_at: string | null;
+  plan_type: string | null;
+  tax_regime: string | null;
+  withhold_ir: boolean | null;
+  beneficiary: string | null;
+}
+
+interface InvestmentTx {
+  id: string;
+  investment_id: string;
+  account_id: string | null;
+  type: string;
+  amount: number;
+  date: string;
+  ir_type: string | null;
+  quantity: number | null;
+  rate_per_share: number | null;
+  yield_percent: number | null;
+}
+
+const NONE = "__none__";
+
+const emptyForm = {
+  id: "",
+  name: "",
+  institution: "",
+  type: "CDB",
+  application_date: todayISO(),
+  invested_amount: "",
+  current_amount: "",
+  maturity_date: "",
+  liquidity: "diária",
+  status: "ativo",
+  family_member_id: NONE,
+  ticker: "",
+  quantity: "",
+  average_price: "",
+  plan_type: NONE,
+  tax_regime: NONE,
+  withhold_ir: false,
+  beneficiary: "",
+};
+
+const emptyMove = {
+  investment_id: "",
+  account_id: NONE,
+  type: "aplicação" as (typeof INVESTMENT_TX_TYPES)[number],
+  amount: "",
+  quantity: "",
+  unit_price: "",
+  date: todayISO(),
+  ir_type: NONE,
+};
+
+const emptyContribution = {
+  investment_id: "",
+  amount: "",
+  start_date: todayISO(),
+  end_date: "",
+  frequency: "mensal",
+  account_id: NONE,
+};
+
+function InvestimentosPage() {
+  const scope = useScope();
+  const invalidate = useInvalidateFinance();
+  const investments = useTable<InvestmentRow>("investments");
+  const moves = useTable<InvestmentTx>("investment_transactions");
+  const accounts = useTable<Named>("accounts");
+  const members = useTable<Named>("family_members");
+  const upsert = useUpsert("investments", "Investimento salvo");
+  const remove = useRemove("investments", "Investimento excluído");
+  const queryClient = useQueryClient();
+
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [move, setMove] = useState(emptyMove);
+  const [contributionOpen, setContributionOpen] = useState(false);
+  const [contribution, setContribution] = useState(emptyContribution);
+  const [saving, setSaving] = useState(false);
+
+  const rows = useMemo(
+    () => (investments.data ?? []).filter((i) => scope.matches(i.family_member_id)),
+    [investments.data, scope],
+  );
+
+  const tickers = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of investments.data ?? []) {
+      if (r.ticker) set.add(normalizeTicker(r.ticker));
+    }
+    const formTicker = normalizeTicker(form.ticker);
+    if (open && isQuoted(form.type) && formTicker.length >= 4) set.add(formTicker);
+    return [...set].sort();
+  }, [investments.data, form.ticker, form.type, open]);
+
+  const quotes = useQuery({
+    queryKey: ["quotes", tickers.join(",")],
+    queryFn: () => getQuotes({ data: { tickers } }),
+    enabled: tickers.length > 0,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+    staleTime: 30_000,
+  });
+
+  const quoteMap = useMemo(
+    () => new Map((quotes.data ?? []).map((q) => [q.symbol, q])),
+    [quotes.data],
+  );
+
+  const formLiveQuote = quoteMap.get(normalizeTicker(form.ticker));
+
+  // Mantém o saldo atual dos ativos de renda variável sincronizado com a cotação.
+  useEffect(() => {
+    if (!quotes.data?.length) return;
+    for (const row of investments.data ?? []) {
+      if (!row.ticker) continue;
+      const quote = quoteMap.get(normalizeTicker(row.ticker));
+      const qty = Number(row.quantity ?? 0);
+      if (!quote || qty <= 0) continue;
+      const nextValue = Number((qty * quote.price).toFixed(2));
+      if (
+        Math.abs(nextValue - Number(row.current_amount ?? 0)) < 0.01 &&
+        Math.abs(quote.price - Number(row.last_quote ?? 0)) < 0.0001
+      ) {
+        continue;
+      }
+      void supabase
+        .from("investments")
+        .update({
+          current_amount: nextValue,
+          last_quote: quote.price,
+          quote_updated_at: new Date().toISOString(),
+        })
+        .eq("id", row.id)
+        .then(() => queryClient.invalidateQueries({ queryKey: ["investments"] }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quotes.data]);
+
+  const totals = useMemo(() => {
+    const invested = rows.reduce((s, r) => s + Number(r.invested_amount), 0);
+    const current = rows.reduce((s, r) => {
+      const quote = r.ticker ? quoteMap.get(normalizeTicker(r.ticker)) : undefined;
+      const qty = Number(r.quantity ?? 0);
+      if (quote && qty > 0) return s + qty * quote.price;
+      return s + Number(r.current_amount);
+    }, 0);
+    return {
+      invested,
+      current,
+      profit: current - invested,
+      pct: invested > 0 ? ((current - invested) / invested) * 100 : 0,
+    };
+  }, [rows, quoteMap]);
+
+  const allocation = useMemo(() => {
+    const byType = new Map<string, number>();
+    for (const r of rows) {
+      const quote = r.ticker ? quoteMap.get(normalizeTicker(r.ticker)) : undefined;
+      const qty = Number(r.quantity ?? 0);
+      const value = quote && qty > 0 ? qty * quote.price : Number(r.current_amount);
+      byType.set(r.type, (byType.get(r.type) ?? 0) + value);
+    }
+    return [...byType.entries()].map(([name, value]) => ({ name, value }));
+  }, [rows, quoteMap]);
+
+  const invName = useMemo(() => new Map(rows.map((r) => [r.id, r.name])), [rows]);
+  const accName = useMemo(
+    () => new Map((accounts.data ?? []).map((a) => [a.id, a.name])),
+    [accounts.data],
+  );
+
+  const recentMoves = useMemo(
+    () => (moves.data ?? []).filter((m) => invName.has(m.investment_id)).slice(0, 15),
+    [moves.data, invName],
+  );
+
+  const [divFilter, setDivFilter] = useState<string>("__all__");
+  const dividends = useMemo(() => {
+    const all = (moves.data ?? []).filter(
+      (m) => invName.has(m.investment_id) && ["dividendo", "jcp", "rendimento"].includes(m.type),
+    );
+    const list = divFilter === "__all__" ? all : all.filter((m) => m.investment_id === divFilter);
+    const year = String(new Date().getFullYear());
+    const now = new Date();
+    const monthly: { month: string; label: string; total: number }[] = [];
+    for (let k = 11; k >= 0; k--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - k, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      monthly.push({
+        month: key,
+        label: d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }),
+        total: list.filter((m) => m.date.startsWith(key)).reduce((s, m) => s + Number(m.amount), 0),
+      });
+    }
+    const assets = Array.from(new Set(all.map((m) => m.investment_id)));
+    return {
+      list: [...list].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30),
+      total: list.reduce((s, m) => s + Number(m.amount), 0),
+      year: list.filter((m) => m.date.startsWith(year)).reduce((s, m) => s + Number(m.amount), 0),
+      monthly,
+      assets,
+    };
+  }, [moves.data, invName, divFilter]);
+
+  const dividendByInvestment = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const m of moves.data ?? []) {
+      if (!["dividendo", "jcp", "rendimento"].includes(m.type)) continue;
+      map.set(m.investment_id, (map.get(m.investment_id) ?? 0) + Number(m.amount));
+    }
+    return map;
+  }, [moves.data]);
+
+  function openNew() {
+    setForm({ ...emptyForm, family_member_id: scope.memberId ?? NONE });
+    setOpen(true);
+  }
+
+  function openEdit(row: InvestmentRow) {
+    setForm({
+      id: row.id,
+      name: row.name,
+      institution: row.institution ?? "",
+      type: row.type,
+      application_date: row.application_date,
+      invested_amount: String(row.invested_amount ?? ""),
+      current_amount: String(row.current_amount ?? ""),
+      maturity_date: row.maturity_date ?? "",
+      liquidity: row.liquidity ?? "diária",
+      status: row.status,
+      family_member_id: row.family_member_id ?? NONE,
+      ticker: row.ticker ?? "",
+      quantity: row.quantity != null ? String(row.quantity) : "",
+      average_price: row.average_price != null ? String(row.average_price) : "",
+      plan_type: row.plan_type ?? NONE,
+      tax_regime: row.tax_regime ?? NONE,
+      withhold_ir: row.withhold_ir ?? false,
+      beneficiary: row.beneficiary ?? "",
+    });
+    setOpen(true);
+  }
+
+  function save() {
+    if (!form.name.trim()) return;
+    const quoted = isQuoted(form.type);
+    const isPension = form.type === "previdência";
+    const ticker = quoted ? normalizeTicker(form.ticker) : "";
+    const quantity = quoted ? parseCurrencyInput(form.quantity || "0") : 0;
+    const averagePrice = quoted ? parseCurrencyInput(form.average_price || "0") : 0;
+
+    if (quoted && (!ticker || quantity <= 0 || averagePrice <= 0)) {
+      toast.error("Informe código do ativo, quantidade de cotas e preço médio.");
+      return;
+    }
+
+    if (isPension && form.plan_type === NONE) {
+      toast.error("Informe o tipo do plano de previdência (PGBL ou VGBL).");
+      return;
+    }
+
+    const liveQuote = quoted ? quoteMap.get(ticker)?.price : undefined;
+    const invested = quoted
+      ? Number((quantity * averagePrice).toFixed(2))
+      : parseCurrencyInput(form.invested_amount || "0");
+    const current = quoted
+      ? Number((quantity * (liveQuote ?? averagePrice)).toFixed(2))
+      : parseCurrencyInput(form.current_amount || String(invested));
+
+    upsert.mutate(
+      {
+        ...(form.id ? { id: form.id } : {}),
+        name: form.name.trim(),
+        institution: form.institution.trim() || null,
+        type: form.type,
+        application_date: form.application_date,
+        invested_amount: invested,
+        current_amount: current,
+        maturity_date: form.maturity_date || null,
+        liquidity: form.liquidity || null,
+        status: form.status,
+        family_member_id: form.family_member_id === NONE ? null : form.family_member_id,
+        ticker: quoted ? ticker : null,
+        quantity: quoted ? quantity : null,
+        average_price: quoted ? averagePrice : null,
+        last_quote: quoted ? (liveQuote ?? averagePrice) : null,
+        quote_updated_at: quoted && liveQuote ? new Date().toISOString() : null,
+        plan_type: isPension ? form.plan_type : null,
+        tax_regime: isPension ? form.tax_regime || null : null,
+        withhold_ir: isPension ? form.withhold_ir : null,
+        beneficiary: isPension ? form.beneficiary.trim() || null : null,
+      },
+      { onSuccess: () => setOpen(false) },
+    );
+  }
+
+  function openContribution(row: InvestmentRow) {
+    setContribution({
+      ...emptyContribution,
+      investment_id: row.id,
+      account_id: NONE,
+    });
+    setContributionOpen(true);
+  }
+
+  async function saveContribution() {
+    const amount = parseCurrencyInput(contribution.amount);
+    if (!contribution.investment_id || amount <= 0) {
+      toast.error("Informe um valor válido.");
+      return;
+    }
+    const row = rows.find((r) => r.id === contribution.investment_id);
+    if (!row) {
+      toast.error("Investimento não encontrado.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const user_id = userData.user?.id;
+      if (!user_id) throw new Error("Sessão expirada. Faça login novamente.");
+
+      const { data, error } = await supabase
+        .from("recurring_transactions")
+        .insert({
+          user_id,
+          description: `Aporte ${row.name}`,
+          amount,
+          type: "despesa",
+          frequency: contribution.frequency,
+          start_date: contribution.start_date,
+          end_date: contribution.end_date || null,
+          account_id: contribution.account_id === NONE ? null : contribution.account_id,
+          family_member_id: row.family_member_id,
+          investment_id: row.id,
+          is_investment_contribution: true,
+          is_active: true,
+        })
+        .select("id")
+        .single();
+      if (error) throw new Error(error.message);
+
+      const recurring = {
+        id: data?.id ?? "",
+        description: `Aporte ${row.name}`,
+        amount,
+        type: "despesa",
+        frequency: contribution.frequency,
+        start_date: contribution.start_date,
+        end_date: contribution.end_date || null,
+        category_id: null,
+        account_id: contribution.account_id === NONE ? null : contribution.account_id,
+        credit_card_id: null,
+        family_member_id: row.family_member_id,
+        investment_id: row.id,
+        is_investment_contribution: true,
+        investment_name: row.name,
+      };
+      const created = await materializeRecurring(recurring, [contribution.start_date]);
+      invalidate();
+      toast.success(`Aporte recorrente criado: ${created} ocorrência(s) gerada(s).`);
+      setContributionOpen(false);
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function openMove(row: InvestmentRow) {
+    // sugere a cotação atual como preço por cota (dá para editar)
+    const price = row.ticker
+      ? (quoteMap.get(normalizeTicker(row.ticker))?.price ?? row.last_quote)
+      : row.last_quote;
+    setMove({
+      ...emptyMove,
+      investment_id: row.id,
+      unit_price: price ? String(price).replace(".", ",") : "",
+    });
+    setMoveOpen(true);
+  }
+
+  // Compra/venda de ações, FIIs, ETFs e cripto usam cotas e preço por cota.
+  const moveRow = rows.find((r) => r.id === move.investment_id);
+  const moveUsesQuotas = Boolean(
+    moveRow && isQuoted(moveRow.type) && (move.type === "aplicação" || move.type === "resgate"),
+  );
+  const moveQuantity = parseDecimalInput(move.quantity);
+  const moveUnitPrice = parseDecimalInput(move.unit_price);
+  const movePosition = moveRow ? positionOf(moveRow) : null;
+  const moveQuote = moveRow?.ticker
+    ? (quoteMap.get(normalizeTicker(moveRow.ticker))?.price ?? moveRow.last_quote ?? null)
+    : null;
+  let moveBuy: ReturnType<typeof applyBuy> | null = null;
+  let moveSell: ReturnType<typeof applySell> | null = null;
+  let movePreviewError: string | null = null;
+  if (moveUsesQuotas && movePosition && moveQuantity > 0 && moveUnitPrice > 0) {
+    try {
+      if (move.type === "aplicação") moveBuy = applyBuy(movePosition, moveQuantity, moveUnitPrice);
+      else moveSell = applySell(movePosition, moveQuantity, moveUnitPrice);
+    } catch (error) {
+      movePreviewError = (error as Error).message;
+    }
+  }
+
+  async function saveMove() {
+    let amount = parseCurrencyInput(move.amount);
+    let quantity: number | null = null;
+    let unit_price: number | null = null;
+    if (moveUsesQuotas) {
+      if (moveQuantity <= 0 || moveUnitPrice <= 0) {
+        toast.error("Informe a quantidade de cotas e o preço por cota.");
+        return;
+      }
+      if (movePreviewError) {
+        toast.error(movePreviewError);
+        return;
+      }
+      quantity = moveQuantity;
+      unit_price = moveUnitPrice;
+      amount = tradeTotal(moveQuantity, moveUnitPrice);
+    }
+    if (!move.investment_id || amount <= 0) {
+      toast.error("Informe um valor válido.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await createInvestmentMove({
+        investment_id: move.investment_id,
+        account_id: move.account_id === NONE ? null : move.account_id,
+        amount,
+        quantity,
+        unit_price,
+        date: move.date,
+        type: move.type,
+        ir_type: move.ir_type === NONE ? null : move.ir_type,
+        family_member_id: rows.find((r) => r.id === move.investment_id)?.family_member_id ?? null,
+        investment_name: invName.get(move.investment_id) ?? "Investimento",
+      });
+      invalidate();
+      toast.success("Movimentação registrada");
+      setMoveOpen(false);
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Investimentos"
+        description="Carteira, aportes, resgates e rendimentos integrados ao fluxo de caixa."
+        actions={
+          <div className="flex gap-2">
+            {tickers.length > 0 ? (
+              <Button
+                variant="outline"
+                onClick={() => quotes.refetch()}
+                disabled={quotes.isFetching}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${quotes.isFetching ? "animate-spin" : ""}`} />
+                Atualizar cotações
+              </Button>
+            ) : null}
+            <Button onClick={openNew}>
+              <Plus className="mr-2 h-4 w-4" /> Novo investimento
+            </Button>
+          </div>
+        }
+      />
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-xs uppercase text-muted-foreground">Investido</p>
+            <p className="text-xl font-semibold">{formatBRL(totals.invested)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-xs uppercase text-muted-foreground">Saldo atual</p>
+            <p className="text-xl font-semibold">{formatBRL(totals.current)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-xs uppercase text-muted-foreground">Rentabilidade</p>
+            <p
+              className={`text-xl font-semibold ${totals.profit >= 0 ? "text-chart-2" : "text-destructive"}`}
+            >
+              {formatBRL(totals.profit)} ({formatPercent(totals.pct)})
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <AllocationChart
+        title="Alocação por tipo"
+        description="Distribuição do valor atual da carteira por classe de ativo."
+        slices={allocation}
+      />
+
+      {investments.isLoading ? (
+        <LoadingState rows={4} />
+      ) : investments.isError ? (
+        <ErrorState
+          message={(investments.error as Error)?.message}
+          onRetry={() => investments.refetch()}
+        />
+      ) : rows.length === 0 ? (
+        <EmptyState
+          title="Nenhum investimento"
+          description="Cadastre CDBs, fundos, ações e acompanhe a rentabilidade."
+          icon={<TrendingUp className="h-6 w-6" />}
+          action={
+            <Button onClick={openNew}>
+              <Plus className="mr-2 h-4 w-4" /> Novo investimento
+            </Button>
+          }
+        />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {rows.map((row) => {
+            const quote = row.ticker ? quoteMap.get(normalizeTicker(row.ticker)) : undefined;
+            const qty = Number(row.quantity ?? 0);
+            const unit = quote?.price ?? Number(row.last_quote ?? 0);
+            const current =
+              row.ticker && qty > 0 && unit > 0 ? qty * unit : Number(row.current_amount);
+            const profit = current - Number(row.invested_amount);
+            const pct =
+              Number(row.invested_amount) > 0 ? (profit / Number(row.invested_amount)) * 100 : 0;
+            const dividendTotal = dividendByInvestment.get(row.id) ?? 0;
+            return (
+              <Card key={row.id}>
+                <CardHeader className="flex flex-row items-start justify-between gap-2 pb-2">
+                  <div>
+                    <CardTitle className="text-base">
+                      {row.ticker ? `${row.ticker} · ` : ""}
+                      {row.name}
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">
+                      {row.institution || "Sem instituição"} · {row.type}
+                    </p>
+                  </div>
+                  <div className="flex gap-1">
+                    {row.type === "previdência" ? (
+                      <Button variant="ghost" size="icon" onClick={() => openContribution(row)}>
+                        <PiggyBank className="h-4 w-4" />
+                      </Button>
+                    ) : null}
+                    <Button variant="ghost" size="icon" onClick={() => openMove(row)}>
+                      <ArrowDownUp className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => openEdit(row)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <ConfirmDelete
+                      trigger={
+                        <Button variant="ghost" size="icon">
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      }
+                      onConfirm={() => remove.mutate(row.id)}
+                    />
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <p className="text-2xl font-semibold">{formatBRL(current)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Investido {formatBRL(Number(row.invested_amount))}
+                  </p>
+                  {row.ticker && qty > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      {qty.toLocaleString("pt-BR")} cotas · preço médio{" "}
+                      {formatBRL(Number(row.average_price ?? 0))} · cotação {formatBRL(unit)}
+                      {quote ? ` (${formatPercent(quote.changePercent)} hoje)` : ""}
+                    </p>
+                  ) : null}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant={profit >= 0 ? "secondary" : "destructive"}>
+                      {formatBRL(profit)} · {formatPercent(pct)}
+                    </Badge>
+                    {dividendTotal > 0 ? (
+                      <Badge variant="outline">Proventos {formatBRL(dividendTotal)}</Badge>
+                    ) : null}
+                    {row.maturity_date ? (
+                      <Badge variant="outline">Vence {formatDateBR(row.maturity_date)}</Badge>
+                    ) : null}
+                    {row.status !== "ativo" ? <Badge variant="outline">{row.status}</Badge> : null}
+                    {row.type === "previdência" && row.plan_type ? (
+                      <Badge variant="secondary">
+                        {row.plan_type} · {row.tax_regime || "IR"}
+                        {row.withhold_ir ? " · retido na fonte" : ""}
+                      </Badge>
+                    ) : null}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {recentMoves.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Movimentações recentes</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Investimento</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Conta</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {recentMoves.map((m) => (
+                  <TableRow key={m.id}>
+                    <TableCell className="whitespace-nowrap">{formatDateBR(m.date)}</TableCell>
+                    <TableCell>{invName.get(m.investment_id)}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{m.type}</Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {m.account_id ? (accName.get(m.account_id) ?? "-") : "-"}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold">
+                      {formatBRL(Number(m.amount))}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{form.id ? "Editar investimento" : "Novo investimento"}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="inv-name">Nome</Label>
+              <Input
+                id="inv-name"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="CDB Banco X 110% CDI"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="inv-inst">Instituição</Label>
+              <Input
+                id="inv-inst"
+                value={form.institution}
+                onChange={(e) => setForm({ ...form, institution: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Tipo</Label>
+              <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {INVESTMENT_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {isQuoted(form.type) ? (
+              <>
+                <div className="grid gap-2">
+                  <Label htmlFor="inv-ticker">Código do ativo</Label>
+                  <Input
+                    id="inv-ticker"
+                    value={form.ticker}
+                    onChange={(e) => setForm({ ...form, ticker: e.target.value.toUpperCase() })}
+                    placeholder="PETR4 / HGLG11"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="inv-qty">Quantidade de cotas</Label>
+                  <Input
+                    id="inv-qty"
+                    value={form.quantity}
+                    onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+                    inputMode="decimal"
+                    placeholder="100"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="inv-avg">Preço médio da cota</Label>
+                  <Input
+                    id="inv-avg"
+                    value={form.average_price}
+                    onChange={(e) => setForm({ ...form, average_price: e.target.value })}
+                    inputMode="decimal"
+                    placeholder="0,00"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Cotação atual</Label>
+                  <div className="flex h-9 items-center rounded-md border bg-muted/40 px-3 text-sm">
+                    {formLiveQuote
+                      ? `${formatBRL(formLiveQuote.price)} (${formatPercent(formLiveQuote.changePercent)})`
+                      : "Informe o código para buscar"}
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground sm:col-span-2">
+                  Valor investido = cotas × preço médio. O saldo atual é calculado com a cotação de
+                  mercado e atualizado automaticamente.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="grid gap-2">
+                  <Label htmlFor="inv-invested">Valor investido</Label>
+                  <Input
+                    id="inv-invested"
+                    value={form.invested_amount}
+                    onChange={(e) => setForm({ ...form, invested_amount: e.target.value })}
+                    inputMode="decimal"
+                    placeholder="0,00"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="inv-current">Saldo atual</Label>
+                  <Input
+                    id="inv-current"
+                    value={form.current_amount}
+                    onChange={(e) => setForm({ ...form, current_amount: e.target.value })}
+                    inputMode="decimal"
+                    placeholder="0,00"
+                  />
+                </div>
+              </>
+            )}
+            <div className="grid gap-2">
+              <Label htmlFor="inv-date">Aplicação</Label>
+              <Input
+                id="inv-date"
+                type="date"
+                value={form.application_date}
+                onChange={(e) => setForm({ ...form, application_date: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="inv-maturity">Vencimento</Label>
+              <Input
+                id="inv-maturity"
+                type="date"
+                value={form.maturity_date}
+                onChange={(e) => setForm({ ...form, maturity_date: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Liquidez</Label>
+              <Select
+                value={form.liquidity}
+                onValueChange={(v) => setForm({ ...form, liquidity: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="diária">Diária</SelectItem>
+                  <SelectItem value="no vencimento">No vencimento</SelectItem>
+                  <SelectItem value="D+30">D+30</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>Status</Label>
+              <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ativo">Ativo</SelectItem>
+                  <SelectItem value="resgatado">Resgatado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {form.type === "previdência" ? (
+              <>
+                <div className="grid gap-2">
+                  <Label>Tipo do plano</Label>
+                  <Select
+                    value={form.plan_type}
+                    onValueChange={(v) => setForm({ ...form, plan_type: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE}>Selecione</SelectItem>
+                      {PENSION_PLAN_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label>Regime de tributação</Label>
+                  <Select
+                    value={form.tax_regime}
+                    onValueChange={(v) => setForm({ ...form, tax_regime: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NONE}>Não informado</SelectItem>
+                      {TAX_REGIMES.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="inv-beneficiary">Beneficiário</Label>
+                  <Input
+                    id="inv-beneficiary"
+                    value={form.beneficiary}
+                    onChange={(e) => setForm({ ...form, beneficiary: e.target.value })}
+                    placeholder="Nome do beneficiário"
+                  />
+                </div>
+                <div className="flex items-center gap-2 py-2">
+                  <Checkbox
+                    id="inv-withhold"
+                    checked={form.withhold_ir}
+                    onCheckedChange={(v) => setForm({ ...form, withhold_ir: Boolean(v) })}
+                  />
+                  <Label htmlFor="inv-withhold" className="cursor-pointer">
+                    Retém IR na fonte
+                  </Label>
+                </div>
+              </>
+            ) : null}
+            <div className="grid gap-2 sm:col-span-2">
+              <Label>Pessoa</Label>
+              <Select
+                value={form.family_member_id}
+                onValueChange={(v) => setForm({ ...form, family_member_id: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Família" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>Família (compartilhada)</SelectItem>
+                  {(members.data ?? []).map((m) => (
+                    <SelectItem key={m.id} value={m.id}>
+                      {m.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={save} disabled={upsert.isPending}>
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+          <div>
+            <CardTitle className="text-base">Dividendos e proventos</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Recebido no total {formatBRL(dividends.total)} · {formatBRL(dividends.year)} em{" "}
+              {new Date().getFullYear()}
+            </p>
+          </div>
+          <Select value={divFilter} onValueChange={setDivFilter}>
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todos os ativos</SelectItem>
+              {dividends.assets.map((id) => (
+                <SelectItem key={id} value={id}>
+                  {invName.get(id)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardHeader>
+        <CardContent className="p-0">
+          {dividends.total > 0 ? (
+            <div className="h-56 px-4 pb-4">
+              <p className="mb-2 text-xs text-muted-foreground">Proventos dos últimos 12 meses</p>
+              <ResponsiveContainer width="100%" height="90%">
+                <BarChart data={dividends.monthly}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                  <XAxis dataKey="label" fontSize={11} />
+                  <YAxis fontSize={11} tickFormatter={(v) => `R$${v}`} width={60} />
+                  <RTooltip formatter={(v: number) => formatBRL(Number(v))} />
+                  <Bar
+                    dataKey="total"
+                    name="Proventos"
+                    fill="var(--color-chart-2)"
+                    radius={[4, 4, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : null}
+          {dividends.list.length === 0 ? (
+            <p className="px-6 pb-6 text-sm text-muted-foreground">
+              Nenhum provento registrado. Use o botão de movimentação em um ativo e escolha
+              dividendo, JCP ou rendimento.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Ativo</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead className="text-right">Cotas</TableHead>
+                  <TableHead className="text-right">R$/cota</TableHead>
+                  <TableHead className="text-right">Yield</TableHead>
+                  <TableHead>Conta</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {dividends.list.map((m) => (
+                  <TableRow key={m.id}>
+                    <TableCell className="whitespace-nowrap">{formatDateBR(m.date)}</TableCell>
+                    <TableCell>{invName.get(m.investment_id)}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{m.type}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {m.quantity != null ? Number(m.quantity).toLocaleString("pt-BR") : "-"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {m.rate_per_share != null
+                        ? Number(m.rate_per_share).toLocaleString("pt-BR", {
+                            style: "currency",
+                            currency: "BRL",
+                            minimumFractionDigits: 4,
+                          })
+                        : "-"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {m.yield_percent != null
+                        ? `${Number(m.yield_percent).toFixed(2).replace(".", ",")}%`
+                        : "-"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {m.account_id ? (accName.get(m.account_id) ?? "-") : "-"}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold text-chart-2">
+                      {formatBRL(Number(m.amount))}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={moveOpen} onOpenChange={setMoveOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Movimentar investimento</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label>Tipo</Label>
+              <Select
+                value={move.type}
+                onValueChange={(v) =>
+                  setMove({ ...move, type: v as (typeof INVESTMENT_TX_TYPES)[number] })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {INVESTMENT_TX_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {moveUsesQuotas ? (
+              <>
+                {movePosition ? (
+                  <p className="text-xs text-muted-foreground">
+                    Posição atual: {movePosition.quantity.toLocaleString("pt-BR")} cotas · preço
+                    médio {formatBRL(movePosition.average_price)}
+                    {moveQuote ? ` · cotação ${formatBRL(moveQuote)}` : ""}
+                  </p>
+                ) : null}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="grid gap-2">
+                    <Label htmlFor="mv-quantity">
+                      {move.type === "aplicação" ? "Cotas compradas" : "Cotas vendidas"}
+                    </Label>
+                    <Input
+                      id="mv-quantity"
+                      value={move.quantity}
+                      onChange={(e) => setMove({ ...move, quantity: e.target.value })}
+                      inputMode="decimal"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="mv-unit-price">
+                      {move.type === "aplicação"
+                        ? "Preço pago por cota"
+                        : "Preço de venda por cota"}
+                    </Label>
+                    <Input
+                      id="mv-unit-price"
+                      value={move.unit_price}
+                      onChange={(e) => setMove({ ...move, unit_price: e.target.value })}
+                      inputMode="decimal"
+                      placeholder="0,00"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Use vírgula para decimais (ex.: 0,005 ou 24,20).
+                </p>
+                {movePreviewError ? (
+                  <p className="text-sm text-destructive">{movePreviewError}</p>
+                ) : null}
+                {moveBuy ? (
+                  <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
+                    <div className="flex justify-between">
+                      <span>Valor total</span>
+                      <strong>{formatBRL(moveBuy.total)}</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Nova quantidade</span>
+                      <span>{moveBuy.quantity.toLocaleString("pt-BR")} cotas</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Novo preço médio</span>
+                      <span>
+                        {formatBRL(moveBuy.average_price)}
+                        {movePosition && movePosition.quantity > 0
+                          ? ` (antes ${formatBRL(movePosition.average_price)})`
+                          : ""}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Total investido</span>
+                      <span>{formatBRL(moveBuy.invested)}</span>
+                    </div>
+                    {moveQuote ? (
+                      <div className="flex justify-between">
+                        <span>Resultado na cotação atual</span>
+                        <span
+                          className={
+                            moveQuote * moveBuy.quantity - moveBuy.invested >= 0
+                              ? "text-emerald-600"
+                              : "text-destructive"
+                          }
+                        >
+                          {formatBRL(moveQuote * moveBuy.quantity - moveBuy.invested)} (
+                          {formatPercent(
+                            moveBuy.invested > 0
+                              ? ((moveQuote * moveBuy.quantity - moveBuy.invested) /
+                                  moveBuy.invested) *
+                                  100
+                              : 0,
+                          )}
+                          )
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+                {moveSell ? (
+                  <div className="rounded-md border bg-muted/40 p-3 text-sm space-y-1">
+                    <div className="flex justify-between">
+                      <span>Valor recebido</span>
+                      <strong>{formatBRL(moveSell.total)}</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Custo das cotas vendidas</span>
+                      <span>{formatBRL(moveSell.cost_basis)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Resultado da venda</span>
+                      <span
+                        className={moveSell.realized >= 0 ? "text-emerald-600" : "text-destructive"}
+                      >
+                        {formatBRL(moveSell.realized)} ({formatPercent(moveSell.realized_pct)})
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Cotas restantes</span>
+                      <span>{moveSell.quantity.toLocaleString("pt-BR")}</span>
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <div className="grid gap-2">
+                <Label htmlFor="mv-amount">Valor</Label>
+                <Input
+                  id="mv-amount"
+                  value={move.amount}
+                  onChange={(e) => setMove({ ...move, amount: e.target.value })}
+                  inputMode="decimal"
+                  placeholder="0,00"
+                />
+              </div>
+            )}
+            <div className="grid gap-2">
+              <Label htmlFor="mv-date">Data</Label>
+              <Input
+                id="mv-date"
+                type="date"
+                value={move.date}
+                onChange={(e) => setMove({ ...move, date: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Conta de origem/destino</Label>
+              <Select
+                value={move.account_id}
+                onValueChange={(v) => setMove({ ...move, account_id: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sem conta" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>Sem conta</SelectItem>
+                  {(accounts.data ?? []).map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>Tributação</Label>
+              <Select value={move.ir_type} onValueChange={(v) => setMove({ ...move, ir_type: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Não informado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>Não informado</SelectItem>
+                  {IR_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Aportes e resgates são registrados como transferência (não afetam receitas/despesas).
+              Rendimentos, dividendos e JCP entram como receita. Em ações, FIIs, ETFs e cripto, a
+              compra e a venda atualizam as cotas e o preço médio.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMoveOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={saveMove} disabled={saving}>
+              Registrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={contributionOpen} onOpenChange={setContributionOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Aporte recorrente em previdência</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="ct-amount">Valor do aporte</Label>
+              <Input
+                id="ct-amount"
+                value={contribution.amount}
+                onChange={(e) => setContribution({ ...contribution, amount: e.target.value })}
+                inputMode="decimal"
+                placeholder="0,00"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Periodicidade</Label>
+              <Select
+                value={contribution.frequency}
+                onValueChange={(v) => setContribution({ ...contribution, frequency: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {RECURRENCE_FREQUENCIES.map((f) => (
+                    <SelectItem key={f} value={f}>
+                      {f}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ct-start">Primeiro aporte</Label>
+              <Input
+                id="ct-start"
+                type="date"
+                value={contribution.start_date}
+                onChange={(e) => setContribution({ ...contribution, start_date: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="ct-end">Último aporte (opcional)</Label>
+              <Input
+                id="ct-end"
+                type="date"
+                value={contribution.end_date}
+                onChange={(e) => setContribution({ ...contribution, end_date: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Conta de saída (opcional)</Label>
+              <Select
+                value={contribution.account_id}
+                onValueChange={(v) => setContribution({ ...contribution, account_id: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Sem conta" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE}>Sem conta</SelectItem>
+                  {(accounts.data ?? []).map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Será criada uma recorrência do tipo "Aporte previdência". Cada ocorrência gera uma
+              aplicação no investimento e, se houver conta, uma saída correspondente no fluxo de
+              caixa.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setContributionOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={saveContribution} disabled={saving}>
+              Criar recorrência
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Tabela regressiva de IR em previdência</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Referência para resgate. O app não calcula o IR devido no resgate.
+          </p>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Tempo de acumulação</TableHead>
+                <TableHead className="text-right">Alíquota</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow>
+                <TableCell>Até 2 anos</TableCell>
+                <TableCell className="text-right font-semibold">35%</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell>De 2 a 4 anos</TableCell>
+                <TableCell className="text-right font-semibold">30%</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell>De 4 a 6 anos</TableCell>
+                <TableCell className="text-right font-semibold">25%</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell>De 6 a 8 anos</TableCell>
+                <TableCell className="text-right font-semibold">20%</TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell>Acima de 8 anos</TableCell>
+                <TableCell className="text-right font-semibold">15%</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
