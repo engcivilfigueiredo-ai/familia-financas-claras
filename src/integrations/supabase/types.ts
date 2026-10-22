@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.15"
   }
   public: {
     Tables: {
@@ -478,6 +478,7 @@ export type Database = {
         Row: {
           account_id: string | null
           amount: number
+          cost_basis: number | null
           created_at: string
           date: string
           id: string
@@ -485,6 +486,7 @@ export type Database = {
           ir_type: string | null
           quantity: number | null
           rate_per_share: number | null
+          realized_result: number | null
           type: string
           user_id: string
           yield_percent: number | null
@@ -492,6 +494,7 @@ export type Database = {
         Insert: {
           account_id?: string | null
           amount: number
+          cost_basis?: number | null
           created_at?: string
           date?: string
           id?: string
@@ -499,6 +502,7 @@ export type Database = {
           ir_type?: string | null
           quantity?: number | null
           rate_per_share?: number | null
+          realized_result?: number | null
           type?: string
           user_id: string
           yield_percent?: number | null
@@ -506,6 +510,7 @@ export type Database = {
         Update: {
           account_id?: string | null
           amount?: number
+          cost_basis?: number | null
           created_at?: string
           date?: string
           id?: string
@@ -513,6 +518,7 @@ export type Database = {
           ir_type?: string | null
           quantity?: number | null
           rate_per_share?: number | null
+          realized_result?: number | null
           type?: string
           user_id?: string
           yield_percent?: number | null
@@ -1072,7 +1078,27 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_installment_purchase: {
+        Args: { p_invoices: Json; p_parent: Json; p_rows: Json }
+        Returns: string
+      }
       next_project_number: { Args: never; Returns: string }
+      register_investment_move: {
+        Args: {
+          p_account_id?: string
+          p_amount: number
+          p_date: string
+          p_family_member_id?: string
+          p_investment_id: string
+          p_investment_name: string
+          p_ir_type?: string
+          p_quantity?: number
+          p_recurring_id?: string
+          p_type: string
+          p_unit_price?: number
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
