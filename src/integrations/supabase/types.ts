@@ -478,6 +478,7 @@ export type Database = {
         Row: {
           account_id: string | null
           amount: number
+          cost_basis: number | null
           created_at: string
           date: string
           id: string
@@ -485,6 +486,7 @@ export type Database = {
           ir_type: string | null
           quantity: number | null
           rate_per_share: number | null
+          realized_result: number | null
           type: string
           user_id: string
           yield_percent: number | null
@@ -492,6 +494,7 @@ export type Database = {
         Insert: {
           account_id?: string | null
           amount: number
+          cost_basis?: number | null
           created_at?: string
           date?: string
           id?: string
@@ -499,6 +502,7 @@ export type Database = {
           ir_type?: string | null
           quantity?: number | null
           rate_per_share?: number | null
+          realized_result?: number | null
           type?: string
           user_id: string
           yield_percent?: number | null
@@ -506,6 +510,7 @@ export type Database = {
         Update: {
           account_id?: string | null
           amount?: number
+          cost_basis?: number | null
           created_at?: string
           date?: string
           id?: string
@@ -513,6 +518,7 @@ export type Database = {
           ir_type?: string | null
           quantity?: number | null
           rate_per_share?: number | null
+          realized_result?: number | null
           type?: string
           user_id?: string
           yield_percent?: number | null

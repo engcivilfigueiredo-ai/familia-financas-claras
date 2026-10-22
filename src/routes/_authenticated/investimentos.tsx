@@ -64,6 +64,7 @@ import {
   todayISO,
 } from "@/lib/format";
 import { applyBuy, applySell, positionOf, tradeTotal } from "@/lib/position";
+import { saleResultPct, summarizeSales } from "@/lib/realized";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/investimentos")({
@@ -123,6 +124,8 @@ interface InvestmentTx {
   quantity: number | null;
   rate_per_share: number | null;
   yield_percent: number | null;
+  cost_basis: number | null;
+  realized_result: number | null;
 }
 
 const NONE = "__none__";
@@ -311,6 +314,24 @@ function InvestimentosPage() {
       assets,
     };
   }, [moves.data, invName, divFilter]);
+
+  // Lucro realizado: resultado das vendas de ativos cotados (custo e resultado vêm do banco).
+  const [saleFilter, setSaleFilter] = useState<string>("__all__");
+  const thisYear = String(new Date().getFullYear());
+  const salesAll = useMemo(
+    () =>
+      summarizeSales(moves.data ?? [], { year: thisYear, knownAssets: new Set(invName.keys()) }),
+    [moves.data, invName, thisYear],
+  );
+  const sales = useMemo(
+    () =>
+      summarizeSales(moves.data ?? [], {
+        year: thisYear,
+        assetId: saleFilter === "__all__" ? null : saleFilter,
+        knownAssets: new Set(invName.keys()),
+      }),
+    [moves.data, invName, thisYear, saleFilter],
+  );
 
   const dividendByInvestment = useMemo(() => {
     const map = new Map<string, number>();
@@ -581,7 +602,7 @@ function InvestimentosPage() {
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Card>
           <CardContent className="pt-6">
             <p className="text-xs uppercase text-muted-foreground">Investido</p>
@@ -601,6 +622,19 @@ function InvestimentosPage() {
               className={`text-xl font-semibold ${totals.profit >= 0 ? "text-chart-2" : "text-destructive"}`}
             >
               {formatBRL(totals.profit)} ({formatPercent(totals.pct)})
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-xs uppercase text-muted-foreground">Lucro realizado</p>
+            <p
+              className={`text-xl font-semibold ${salesAll.total >= 0 ? "text-chart-2" : "text-destructive"}`}
+            >
+              {formatBRL(salesAll.total)}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {formatBRL(salesAll.yearTotal)} em {thisYear}
             </p>
           </CardContent>
         </Card>
@@ -994,6 +1028,84 @@ function InvestimentosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {salesAll.count > 0 || rows.some((r) => isQuoted(r.type)) ? (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-base">Vendas e lucro realizado</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Resultado no total{" "}
+                <span className={sales.total >= 0 ? "text-chart-2" : "text-destructive"}>
+                  {formatBRL(sales.total)}
+                </span>{" "}
+                · {formatBRL(sales.yearTotal)} em {thisYear}
+              </p>
+            </div>
+            <Select value={saleFilter} onValueChange={setSaleFilter}>
+              <SelectTrigger className="w-48">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">Todos os ativos</SelectItem>
+                {sales.assets.map((id) => (
+                  <SelectItem key={id} value={id}>
+                    {invName.get(id)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardHeader>
+          <CardContent className="p-0">
+            {sales.list.length === 0 ? (
+              <p className="px-6 pb-6 text-sm text-muted-foreground">
+                Nenhuma venda com resultado registrado ainda. As vendas de ações, FIIs, ETFs e
+                cripto feitas em “Movimentar investimento” (com cotas e preço) aparecem aqui.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Ativo</TableHead>
+                    <TableHead className="text-right">Cotas</TableHead>
+                    <TableHead className="text-right">Preço de venda</TableHead>
+                    <TableHead className="text-right">Recebido</TableHead>
+                    <TableHead className="text-right">Custo</TableHead>
+                    <TableHead className="text-right">Resultado</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sales.list.map((m) => {
+                    const result = Number(m.realized_result ?? 0);
+                    return (
+                      <TableRow key={m.id}>
+                        <TableCell className="whitespace-nowrap">{formatDateBR(m.date)}</TableCell>
+                        <TableCell>{invName.get(m.investment_id)}</TableCell>
+                        <TableCell className="text-right">
+                          {Number(m.quantity ?? 0).toLocaleString("pt-BR")}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatBRL(Number(m.rate_per_share ?? 0))}
+                        </TableCell>
+                        <TableCell className="text-right">{formatBRL(Number(m.amount))}</TableCell>
+                        <TableCell className="text-right">
+                          {formatBRL(Number(m.cost_basis ?? 0))}
+                        </TableCell>
+                        <TableCell
+                          className={`whitespace-nowrap text-right font-semibold ${result >= 0 ? "text-chart-2" : "text-destructive"}`}
+                        >
+                          {formatBRL(result)} ({formatPercent(saleResultPct(m))})
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-2">

@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Building2, HandCoins,
-  Receipt, Pencil, Plus, Trash2 } from "lucide-react";
+import { Building2, HandCoins, Receipt, Pencil, Plus, Trash2 } from "lucide-react";
 import { TransactionDialog } from "@/components/transactions/TransactionDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -41,12 +40,14 @@ export const Route = createFileRoute("/_authenticated/bf-engenharia")({
       { title: "BF Engenharia | Controle Financeiro Família" },
       {
         name: "description",
-        content: "Controle gerencial dos projetos da BF Engenharia: orçamentos, contratos e recebimentos.",
+        content:
+          "Controle gerencial dos projetos da BF Engenharia: orçamentos, contratos e recebimentos.",
       },
       { property: "og:title", content: "BF Engenharia | Controle Financeiro Família" },
       {
         property: "og:description",
-        content: "Controle gerencial dos projetos da BF Engenharia: orçamentos, contratos e recebimentos.",
+        content:
+          "Controle gerencial dos projetos da BF Engenharia: orçamentos, contratos e recebimentos.",
       },
     ],
   }),
@@ -78,7 +79,33 @@ const STATUS = [
 ] as const;
 
 const UF = [
-  "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO",
+  "AC",
+  "AL",
+  "AP",
+  "AM",
+  "BA",
+  "CE",
+  "DF",
+  "ES",
+  "GO",
+  "MA",
+  "MT",
+  "MS",
+  "MG",
+  "PA",
+  "PB",
+  "PR",
+  "PE",
+  "PI",
+  "RJ",
+  "RN",
+  "RS",
+  "RO",
+  "RR",
+  "SC",
+  "SP",
+  "SE",
+  "TO",
 ];
 
 function statusLabel(value: string): string {
@@ -103,7 +130,6 @@ const emptyForm = {
   budget_date: todayISO(),
   closing_date: "",
   contract_amount: "",
-  received_amount: "",
   notes: "",
 };
 
@@ -188,7 +214,6 @@ function BfEngenhariaPage() {
       budget_date: row.budget_date ?? "",
       closing_date: row.closing_date ?? "",
       contract_amount: String(row.contract_amount ?? ""),
-      received_amount: String(row.received_amount ?? ""),
       notes: row.notes ?? "",
     });
     setOpen(true);
@@ -207,13 +232,17 @@ function BfEngenhariaPage() {
         budget_amount: parseCurrencyInput(form.budget_amount || "0"),
         budget_date: form.budget_date || null,
         closing_date: form.closing_date || null,
+        // received_amount não é enviado: é calculado pelos recebimentos (receitas pagas ligadas ao projeto).
         contract_amount: parseCurrencyInput(form.contract_amount || "0"),
-        received_amount: parseCurrencyInput(form.received_amount || "0"),
         notes: form.notes.trim() || null,
       },
       { onSuccess: () => setOpen(false) },
     );
   }
+
+  const editingProject = form.id ? (projects.data ?? []).find((p) => p.id === form.id) : undefined;
+  const editingReceived = Number(editingProject?.received_amount ?? 0);
+  const editingContract = parseCurrencyInput(form.contract_amount || "0");
 
   return (
     <div className="space-y-6">
@@ -242,15 +271,12 @@ function BfEngenhariaPage() {
           { label: "Despesas de projetos", value: expenses.projeto },
           {
             label: "Resultado da empresa",
-            value:
-              totals.received - expenses.fixo - expenses.administrativo - expenses.projeto,
+            value: totals.received - expenses.fixo - expenses.administrativo - expenses.projeto,
           },
         ].map((c) => (
           <Card key={c.label}>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {c.label}
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">{c.label}</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-xl font-semibold">{formatBRL(c.value)}</p>
@@ -336,114 +362,121 @@ function BfEngenhariaPage() {
         />
       ) : (
         <Card>
-          <CardContent className="overflow-x-auto p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nº</TableHead>
-                  <TableHead>Projeto</TableHead>
-                  <TableHead>Cidade/UF</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Orçamento</TableHead>
-                  <TableHead>Data orçamento</TableHead>
-                  <TableHead>Fechamento</TableHead>
-                  <TableHead className="text-right">Contrato</TableHead>
-                  <TableHead className="text-right">Recebido</TableHead>
-                  <TableHead className="text-right">Saldo</TableHead>
-                  <TableHead className="text-right">Despesas</TableHead>
-                  <TableHead className="text-right">Margem</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => {
-                  const contract = Number(row.contract_amount ?? 0);
-                  const received = Number(row.received_amount ?? 0);
-                  const balance = contract - received;
-                  const pct = contract > 0 ? (received / contract) * 100 : 0;
-                  return (
-                    <TableRow key={row.id}>
-                      <TableCell className="font-mono text-xs">{row.project_number}</TableCell>
-                      <TableCell className="font-medium">{row.name}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {[row.city, row.state].filter(Boolean).join(" / ") || "-"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={statusVariant(row.status)}>{statusLabel(row.status)}</Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {formatBRL(Number(row.budget_amount))}
-                      </TableCell>
-                      <TableCell className="text-sm">{formatDateBR(row.budget_date)}</TableCell>
-                      <TableCell className="text-sm">{formatDateBR(row.closing_date)}</TableCell>
-                      <TableCell className="text-right">{formatBRL(contract)}</TableCell>
-                      <TableCell className="text-right">
-                        {formatBRL(received)}
-                        {contract > 0 ? (
-                          <span className="ml-1 text-xs text-muted-foreground">
-                            ({formatPercent(pct, 0)})
-                          </span>
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="text-right">{formatBRL(balance)}</TableCell>
-                      {(() => {
-                        const cost = expenses.byProject.get(row.id) ?? 0;
-                        const margin = contract - cost;
-                        const mPct = contract > 0 ? (margin / contract) * 100 : 0;
-                        return (
-                          <>
-                            <TableCell className="text-right">{formatBRL(cost)}</TableCell>
-                            <TableCell
-                              className={`text-right font-medium ${margin < 0 ? "text-destructive" : ""}`}
+          <CardContent className="p-0">
+            {/* Rolagem própria (vertical e horizontal): cabeçalho e coluna "Nº" ficam fixos. */}
+            <div className="max-h-[70vh] overflow-auto [&>div]:overflow-visible">
+              <Table className="min-w-[72rem]">
+                <TableHeader className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-card [&_th]:shadow-[inset_0_-1px_0_0_var(--border)] [&_th:first-child]:left-0 [&_th:first-child]:z-30">
+                  <TableRow>
+                    <TableHead className="min-w-[4.5rem]">Nº</TableHead>
+                    <TableHead>Projeto</TableHead>
+                    <TableHead>Cidade/UF</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Orçamento</TableHead>
+                    <TableHead>Data orçamento</TableHead>
+                    <TableHead>Fechamento</TableHead>
+                    <TableHead className="text-right">Contrato</TableHead>
+                    <TableHead className="text-right">Recebido</TableHead>
+                    <TableHead className="text-right">Saldo</TableHead>
+                    <TableHead className="text-right">Despesas</TableHead>
+                    <TableHead className="text-right">Margem</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((row) => {
+                    const contract = Number(row.contract_amount ?? 0);
+                    const received = Number(row.received_amount ?? 0);
+                    const balance = contract - received;
+                    const pct = contract > 0 ? (received / contract) * 100 : 0;
+                    return (
+                      <TableRow key={row.id}>
+                        <TableCell className="sticky left-0 z-10 bg-card font-mono text-xs shadow-[inset_-1px_0_0_0_var(--border)]">
+                          {row.project_number}
+                        </TableCell>
+                        <TableCell className="font-medium">{row.name}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {[row.city, row.state].filter(Boolean).join(" / ") || "-"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={statusVariant(row.status)}>
+                            {statusLabel(row.status)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatBRL(Number(row.budget_amount))}
+                        </TableCell>
+                        <TableCell className="text-sm">{formatDateBR(row.budget_date)}</TableCell>
+                        <TableCell className="text-sm">{formatDateBR(row.closing_date)}</TableCell>
+                        <TableCell className="text-right">{formatBRL(contract)}</TableCell>
+                        <TableCell className="text-right">
+                          {formatBRL(received)}
+                          {contract > 0 ? (
+                            <span className="ml-1 text-xs text-muted-foreground">
+                              ({formatPercent(pct, 0)})
+                            </span>
+                          ) : null}
+                        </TableCell>
+                        <TableCell className="text-right">{formatBRL(balance)}</TableCell>
+                        {(() => {
+                          const cost = expenses.byProject.get(row.id) ?? 0;
+                          const margin = contract - cost;
+                          const mPct = contract > 0 ? (margin / contract) * 100 : 0;
+                          return (
+                            <>
+                              <TableCell className="text-right">{formatBRL(cost)}</TableCell>
+                              <TableCell
+                                className={`text-right font-medium ${margin < 0 ? "text-destructive" : ""}`}
+                              >
+                                {formatBRL(margin)}
+                                {contract > 0 ? (
+                                  <span className="ml-1 text-xs text-muted-foreground">
+                                    ({formatPercent(mPct, 0)})
+                                  </span>
+                                ) : null}
+                              </TableCell>
+                            </>
+                          );
+                        })()}
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Registrar recebimento"
+                              aria-label="Registrar recebimento"
+                              onClick={() => setReceiveProject(row.id)}
                             >
-                              {formatBRL(margin)}
-                              {contract > 0 ? (
-                                <span className="ml-1 text-xs text-muted-foreground">
-                                  ({formatPercent(mPct, 0)})
-                                </span>
-                              ) : null}
-                            </TableCell>
-                          </>
-                        );
-                      })()}
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Registrar recebimento"
-                            aria-label="Registrar recebimento"
-                            onClick={() => setReceiveProject(row.id)}
-                          >
-                            <HandCoins className="h-4 w-4 text-primary" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Lançar despesa do projeto"
-                            aria-label="Lançar despesa do projeto"
-                            onClick={() => setExpenseOpen({ projectId: row.id, type: "projeto" })}
-                          >
-                            <Receipt className="h-4 w-4 text-destructive" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => openEdit(row)}>
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <ConfirmDelete
-                            trigger={
-                              <Button variant="ghost" size="icon">
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            }
-                            onConfirm={() => remove.mutate(row.id)}
-                          />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                              <HandCoins className="h-4 w-4 text-primary" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Lançar despesa do projeto"
+                              aria-label="Lançar despesa do projeto"
+                              onClick={() => setExpenseOpen({ projectId: row.id, type: "projeto" })}
+                            >
+                              <Receipt className="h-4 w-4 text-destructive" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => openEdit(row)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <ConfirmDelete
+                              trigger={
+                                <Button variant="ghost" size="icon">
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              }
+                              onConfirm={() => remove.mutate(row.id)}
+                            />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -466,7 +499,6 @@ function BfEngenhariaPage() {
         initialProjectId={expenseOpen?.projectId ?? null}
         initialBfType={expenseOpen?.type ?? null}
       />
-
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl">
@@ -571,16 +603,6 @@ function BfEngenhariaPage() {
                 placeholder="0,00"
               />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="bf-received">Valor recebido</Label>
-              <Input
-                id="bf-received"
-                value={form.received_amount}
-                onChange={(e) => setForm({ ...form, received_amount: e.target.value })}
-                inputMode="decimal"
-                placeholder="0,00"
-              />
-            </div>
             <div className="grid gap-2 sm:col-span-2">
               <Label htmlFor="bf-notes">Observações</Label>
               <Input
@@ -590,15 +612,21 @@ function BfEngenhariaPage() {
                 placeholder="Escopo, condições de pagamento..."
               />
             </div>
-            {parseCurrencyInput(form.contract_amount || "0") > 0 ? (
+            {form.id ? (
               <p className="text-xs text-muted-foreground sm:col-span-2">
-                Saldo a receber:{" "}
-                {formatBRL(
-                  parseCurrencyInput(form.contract_amount || "0") -
-                    parseCurrencyInput(form.received_amount || "0"),
-                )}
+                Recebido até agora: {formatBRL(editingReceived)}
+                {editingContract > 0
+                  ? ` · Saldo a receber: ${formatBRL(editingContract - editingReceived)}`
+                  : ""}
+                . Os recebimentos são registrados pelo botão “Registrar recebimento” na linha do
+                projeto.
               </p>
-            ) : null}
+            ) : (
+              <p className="text-xs text-muted-foreground sm:col-span-2">
+                Depois de salvar, registre os pagamentos pelo botão “Registrar recebimento” (ícone
+                de moedas) na linha do projeto.
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>
