@@ -672,39 +672,60 @@ export type Database = {
       }
       liabilities: {
         Row: {
+          account_id: string | null
+          auto_reduce_balance: boolean
+          category_id: string | null
+          contemplated_at: string | null
           created_at: string
           due_day: number | null
           family_member_id: string | null
+          first_due_date: string | null
           id: string
+          installments_total: number | null
           monthly_payment: number
           name: string
           remaining_amount: number
+          schedule_enabled: boolean
           total_amount: number
           type: string
           updated_at: string
           user_id: string
         }
         Insert: {
+          account_id?: string | null
+          auto_reduce_balance?: boolean
+          category_id?: string | null
+          contemplated_at?: string | null
           created_at?: string
           due_day?: number | null
           family_member_id?: string | null
+          first_due_date?: string | null
           id?: string
+          installments_total?: number | null
           monthly_payment?: number
           name: string
           remaining_amount?: number
+          schedule_enabled?: boolean
           total_amount?: number
           type?: string
           updated_at?: string
           user_id: string
         }
         Update: {
+          account_id?: string | null
+          auto_reduce_balance?: boolean
+          category_id?: string | null
+          contemplated_at?: string | null
           created_at?: string
           due_day?: number | null
           family_member_id?: string | null
+          first_due_date?: string | null
           id?: string
+          installments_total?: number | null
           monthly_payment?: number
           name?: string
           remaining_amount?: number
+          schedule_enabled?: boolean
           total_amount?: number
           type?: string
           updated_at?: string
@@ -958,6 +979,8 @@ export type Database = {
           installment_number: number | null
           invoice_month: string | null
           is_recurring: boolean
+          liability_id: string | null
+          liability_period: string | null
           notes: string | null
           payment_method: string | null
           project_id: string | null
@@ -984,6 +1007,8 @@ export type Database = {
           installment_number?: number | null
           invoice_month?: string | null
           is_recurring?: boolean
+          liability_id?: string | null
+          liability_period?: string | null
           notes?: string | null
           payment_method?: string | null
           project_id?: string | null
@@ -1010,6 +1035,8 @@ export type Database = {
           installment_number?: number | null
           invoice_month?: string | null
           is_recurring?: boolean
+          liability_id?: string | null
+          liability_period?: string | null
           notes?: string | null
           payment_method?: string | null
           project_id?: string | null
@@ -1098,6 +1125,20 @@ export type Database = {
           p_unit_price?: number
         }
         Returns: undefined
+      }
+      register_liability_contemplation: {
+        Args: {
+          p_date: string
+          p_installments_left?: number
+          p_liability_id: string
+          p_new_payment: number
+          p_remaining_amount?: number
+        }
+        Returns: number
+      }
+      sync_liability_schedule: {
+        Args: { p_horizon_months?: number; p_liability_id?: string }
+        Returns: number
       }
     }
     Enums: {

@@ -9,6 +9,8 @@ export interface Tx {
   date: string;
   status: string;
   description: string;
+  /** Parcela de dívida (Patrimônio) que originou este lançamento. */
+  liability_id?: string | null;
   account_id: string | null;
   credit_card_id: string | null;
   category_id: string | null;

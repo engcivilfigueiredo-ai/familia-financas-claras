@@ -17,7 +17,7 @@ function fail(error: { message: string } | null) {
 }
 
 /** Erro de chamada RPC; se a função não existe, o banco ainda não recebeu a atualização. */
-function failRpc(error: { message: string; code?: string } | null) {
+export function failRpc(error: { message: string; code?: string } | null) {
   if (!error) return;
   if (error.code === "PGRST202" || /could not find the function/i.test(error.message)) {
     throw new Error(

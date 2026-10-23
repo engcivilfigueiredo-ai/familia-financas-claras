@@ -45,6 +45,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useScope } from "@/hooks/useScope";
 import { useTable } from "@/hooks/useFinance";
 import { useSeedDefaults } from "@/hooks/useSeedDefaults";
+import { useLiabilitySchedule } from "@/hooks/useLiabilitySchedule";
 import { GlobalSearch } from "./GlobalSearch";
 import { TransactionDialog, type QuickKind } from "@/components/transactions/TransactionDialog";
 import { formatDateBR, todayISO } from "@/lib/format";
@@ -134,6 +135,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const [kind, setKind] = useState<QuickKind>("despesa");
 
   useSeedDefaults(user?.id, (user?.user_metadata?.["full_name"] as string) ?? user?.email?.split("@")[0]);
+  useLiabilitySchedule(user?.id);
 
   const activeMembers = useMemo(
     () => (members.data ?? []).filter((m) => m.is_active),
