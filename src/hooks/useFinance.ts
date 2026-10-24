@@ -19,7 +19,8 @@ export type TableName =
   | "budgets"
   | "financial_goals"
   | "notifications"
-  | "projects";
+  | "projects"
+  | "project_addenda";
 
 const ORDER: Partial<Record<TableName, { column: string; ascending: boolean }>> = {
   transactions: { column: "date", ascending: false },
@@ -36,6 +37,7 @@ const ORDER: Partial<Record<TableName, { column: string; ascending: boolean }>> 
   recurring_transactions: { column: "start_date", ascending: false },
   notifications: { column: "created_at", ascending: false },
   projects: { column: "project_number", ascending: true },
+  project_addenda: { column: "date", ascending: false },
 };
 
 /**
@@ -89,6 +91,7 @@ export function useInvalidateFinance() {
       "recurring_transactions",
       "notifications",
       "projects",
+      "project_addenda",
     ]) {
       qc.invalidateQueries({ queryKey: [key] });
     }

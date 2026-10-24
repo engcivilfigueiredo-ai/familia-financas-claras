@@ -804,8 +804,47 @@ export type Database = {
         }
         Relationships: []
       }
+      project_addenda: {
+        Row: {
+          amount: number
+          created_at: string
+          date: string
+          id: string
+          notes: string | null
+          project_id: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          project_id: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          date?: string
+          id?: string
+          notes?: string | null
+          project_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_addenda_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
+          addenda_amount: number
           budget_amount: number
           budget_date: string | null
           city: string | null
@@ -823,6 +862,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          addenda_amount?: number
           budget_amount?: number
           budget_date?: string | null
           city?: string | null
@@ -840,6 +880,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          addenda_amount?: number
           budget_amount?: number
           budget_date?: string | null
           city?: string | null

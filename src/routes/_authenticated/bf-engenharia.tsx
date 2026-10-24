@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { toast } from "sonner";
 import { Building2, HandCoins, Receipt, Pencil, Plus, Trash2 } from "lucide-react";
 import { TransactionDialog } from "@/components/transactions/TransactionDialog";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,7 @@ import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/s
 import { ConfirmDelete } from "@/components/shared/confirm-delete";
 import { useRemove, useTable, useUpsert } from "@/hooks/useFinance";
 import { formatBRL, formatDateBR, formatPercent, parseCurrencyInput, todayISO } from "@/lib/format";
+import { contractTotal } from "@/lib/projects";
 
 export const Route = createFileRoute("/_authenticated/bf-engenharia")({
   head: () => ({
@@ -65,7 +67,17 @@ interface ProjectRow {
   budget_date: string | null;
   closing_date: string | null;
   contract_amount: number;
+  /** Soma dos aditivos de contrato (mantida pelo banco). */
+  addenda_amount: number;
   received_amount: number;
+  notes: string | null;
+}
+
+interface AddendumRow {
+  id: string;
+  project_id: string;
+  date: string;
+  amount: number;
   notes: string | null;
 }
 
@@ -133,6 +145,8 @@ const emptyForm = {
   notes: "",
 };
 
+const emptyAddendum = { date: "", amount: "", notes: "" };
+
 function nextNumber(rows: ProjectRow[]): string {
   const max = rows.reduce((acc, r) => {
     const n = Number(String(r.project_number ?? "").replace(/\D/g, ""));
@@ -159,6 +173,10 @@ function BfEngenhariaPage() {
     project_id: string | null;
     bf_expense_type: string | null;
   }>("transactions");
+  const addenda = useTable<AddendumRow>("project_addenda");
+  const addendumUpsert = useUpsert("project_addenda", "Aditivo registrado");
+  const addendumRemove = useRemove("project_addenda", "Aditivo excluído");
+  const [addendumForm, setAddendumForm] = useState(emptyAddendum);
 
   const expenses = useMemo(() => {
     const byProject = new Map<string, number>();
@@ -188,7 +206,7 @@ function BfEngenhariaPage() {
   const totals = useMemo(() => {
     const list = projects.data ?? [];
     const budget = list.reduce((s, p) => s + Number(p.budget_amount ?? 0), 0);
-    const contract = list.reduce((s, p) => s + Number(p.contract_amount ?? 0), 0);
+    const contract = list.reduce((s, p) => s + contractTotal(p), 0);
     const received = list.reduce((s, p) => s + Number(p.received_amount ?? 0), 0);
     return { budget, contract, received, balance: contract - received, count: list.length };
   }, [projects.data]);
@@ -216,6 +234,7 @@ function BfEngenhariaPage() {
       contract_amount: String(row.contract_amount ?? ""),
       notes: row.notes ?? "",
     });
+    setAddendumForm({ ...emptyAddendum, date: todayISO() });
     setOpen(true);
   }
 
@@ -242,7 +261,31 @@ function BfEngenhariaPage() {
 
   const editingProject = form.id ? (projects.data ?? []).find((p) => p.id === form.id) : undefined;
   const editingReceived = Number(editingProject?.received_amount ?? 0);
-  const editingContract = parseCurrencyInput(form.contract_amount || "0");
+  const editingAddenda = form.id
+    ? (addenda.data ?? [])
+        .filter((a) => a.project_id === form.id)
+        .sort((a, b) => b.date.localeCompare(a.date))
+    : [];
+  // contrato vigente = valor do campo (original) + aditivos já registrados
+  const editingContract =
+    parseCurrencyInput(form.contract_amount || "0") + Number(editingProject?.addenda_amount ?? 0);
+
+  function addAddendum() {
+    const amount = parseCurrencyInput(addendumForm.amount || "0");
+    if (!form.id || amount <= 0 || !addendumForm.date) {
+      toast.error("Informe a data e o valor adicional do aditivo.");
+      return;
+    }
+    addendumUpsert.mutate(
+      {
+        project_id: form.id,
+        date: addendumForm.date,
+        amount,
+        notes: addendumForm.notes.trim() || null,
+      },
+      { onSuccess: () => setAddendumForm({ ...emptyAddendum, date: todayISO() }) },
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -385,7 +428,8 @@ function BfEngenhariaPage() {
                 </TableHeader>
                 <TableBody>
                   {rows.map((row) => {
-                    const contract = Number(row.contract_amount ?? 0);
+                    const contract = contractTotal(row);
+                    const rowAddenda = Number(row.addenda_amount ?? 0);
                     const received = Number(row.received_amount ?? 0);
                     const balance = contract - received;
                     const pct = contract > 0 ? (received / contract) * 100 : 0;
@@ -408,7 +452,14 @@ function BfEngenhariaPage() {
                         </TableCell>
                         <TableCell className="text-sm">{formatDateBR(row.budget_date)}</TableCell>
                         <TableCell className="text-sm">{formatDateBR(row.closing_date)}</TableCell>
-                        <TableCell className="text-right">{formatBRL(contract)}</TableCell>
+                        <TableCell className="text-right">
+                          {formatBRL(contract)}
+                          {rowAddenda > 0 ? (
+                            <span className="block text-xs text-muted-foreground">
+                              inclui {formatBRL(rowAddenda)} em aditivos
+                            </span>
+                          ) : null}
+                        </TableCell>
                         <TableCell className="text-right">
                           {formatBRL(received)}
                           {contract > 0 ? (
@@ -501,7 +552,7 @@ function BfEngenhariaPage() {
       />
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {form.id ? `Editar projeto ${form.project_number}` : "Adicionar orçamento"}
@@ -594,7 +645,9 @@ function BfEngenhariaPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="bf-contract">Valor do contrato</Label>
+              <Label htmlFor="bf-contract">
+                {form.id ? "Valor do contrato (original)" : "Valor do contrato"}
+              </Label>
               <Input
                 id="bf-contract"
                 value={form.contract_amount}
@@ -612,6 +665,80 @@ function BfEngenhariaPage() {
                 placeholder="Escopo, condições de pagamento..."
               />
             </div>
+            {form.id ? (
+              <div className="grid gap-3 rounded-md border p-3 sm:col-span-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <strong className="text-sm">Aditivos de contrato</strong>
+                  <span className="text-xs text-muted-foreground">
+                    Contrato vigente: {formatBRL(editingContract)}
+                  </span>
+                </div>
+                {editingAddenda.length > 0 ? (
+                  <ul className="divide-y text-sm">
+                    {editingAddenda.map((a) => (
+                      <li key={a.id} className="flex items-center justify-between gap-2 py-1.5">
+                        <span className="min-w-0 truncate">
+                          {formatDateBR(a.date)}
+                          {a.notes ? ` · ${a.notes}` : ""}
+                        </span>
+                        <span className="flex shrink-0 items-center gap-1">
+                          <strong>+ {formatBRL(Number(a.amount))}</strong>
+                          <ConfirmDelete
+                            trigger={
+                              <Button variant="ghost" size="icon" title="Excluir aditivo">
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            }
+                            onConfirm={() => addendumRemove.mutate(a.id)}
+                          />
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Nenhum aditivo registrado.</p>
+                )}
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="grid gap-2">
+                    <Label htmlFor="bf-add-date">Data do aditivo</Label>
+                    <Input
+                      id="bf-add-date"
+                      type="date"
+                      value={addendumForm.date}
+                      onChange={(e) => setAddendumForm({ ...addendumForm, date: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="bf-add-amount">Valor adicional</Label>
+                    <Input
+                      id="bf-add-amount"
+                      value={addendumForm.amount}
+                      onChange={(e) => setAddendumForm({ ...addendumForm, amount: e.target.value })}
+                      inputMode="decimal"
+                      placeholder="0,00"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="bf-add-notes">Observação (opcional)</Label>
+                    <Input
+                      id="bf-add-notes"
+                      value={addendumForm.notes}
+                      onChange={(e) => setAddendumForm({ ...addendumForm, notes: e.target.value })}
+                      placeholder="Ex.: ampliação de escopo"
+                    />
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="justify-self-end"
+                  onClick={addAddendum}
+                  disabled={addendumUpsert.isPending}
+                >
+                  <Plus className="mr-2 h-4 w-4" /> Adicionar aditivo
+                </Button>
+              </div>
+            ) : null}
             {form.id ? (
               <p className="text-xs text-muted-foreground sm:col-span-2">
                 Recebido até agora: {formatBRL(editingReceived)}
