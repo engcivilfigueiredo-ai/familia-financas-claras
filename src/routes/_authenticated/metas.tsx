@@ -330,7 +330,7 @@ function MetasPage() {
                       : ""}
                   </p>
                 ) : (
-                  <p className="text-xs text-primary">Meta alcançada!</p>
+                  <p className="text-xs text-primary-ink">Meta alcançada!</p>
                 )}
                 {row.info.auto ? (
                   <p className="text-xs text-muted-foreground">Atualizado automaticamente pela BF Engenharia</p>

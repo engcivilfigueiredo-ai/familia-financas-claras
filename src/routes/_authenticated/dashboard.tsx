@@ -453,7 +453,7 @@ function DashboardPage() {
                 </div>
               ))
             )}
-            <Link to="/a-pagar" className="block text-sm text-primary underline-offset-4 hover:underline">
+            <Link to="/a-pagar" className="block text-sm text-primary-ink underline-offset-4 hover:underline">
               Ver contas a pagar
             </Link>
           </CardContent>

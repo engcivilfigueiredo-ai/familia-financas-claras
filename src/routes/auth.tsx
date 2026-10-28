@@ -180,7 +180,7 @@ function AuthPage() {
               {mode === "reset" ? (
                 <button
                   type="button"
-                  className="text-primary underline-offset-4 hover:underline"
+                  className="text-primary-ink underline-offset-4 hover:underline"
                   onClick={() => setMode("login")}
                 >
                   Voltar para o login

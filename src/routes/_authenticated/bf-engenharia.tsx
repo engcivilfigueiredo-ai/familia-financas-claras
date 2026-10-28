@@ -498,7 +498,7 @@ function BfEngenhariaPage() {
                               aria-label="Registrar recebimento"
                               onClick={() => setReceiveProject(row.id)}
                             >
-                              <HandCoins className="h-4 w-4 text-primary" />
+                              <HandCoins className="h-4 w-4 text-primary-ink" />
                             </Button>
                             <Button
                               variant="ghost"

@@ -340,7 +340,7 @@ export function TransactionDialog({
                 onClick={() => setKind(key)}
                 className={`flex flex-col items-center gap-1 rounded-xl border p-3 text-xs font-medium transition-colors ${
                   kind === key
-                    ? "border-primary bg-primary/10 text-primary"
+                    ? "border-primary bg-primary/10 text-primary-ink"
                     : "border-border bg-card text-muted-foreground hover:bg-muted"
                 }`}
               >
