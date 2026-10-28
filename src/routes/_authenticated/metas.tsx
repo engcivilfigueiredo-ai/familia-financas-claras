@@ -4,7 +4,6 @@ import { Flag, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +24,16 @@ import { EmptyState, ErrorState, LoadingState, PageHeader } from "@/components/s
 import { ConfirmDelete } from "@/components/shared/confirm-delete";
 import { useRemove, useTable, useUpsert } from "@/hooks/useFinance";
 import { useScope } from "@/hooks/useScope";
+import {
+  GOAL_KINDS,
+  formatGoalAmount,
+  goalContractBalance,
+  goalCurrent,
+  goalPct,
+  goalYear,
+  kindInfo,
+} from "@/lib/goals";
+import { GoalProgress } from "@/components/shared/goal-progress";
 import {
   formatBRL,
   formatDateBR,
@@ -68,25 +77,18 @@ interface ProjectLite {
   id: string;
   budget_date: string | null;
   closing_date: string | null;
+  status: string;
+  contract_amount: number;
+  addenda_amount: number;
+  received_amount: number;
 }
 
 interface TxLite {
   type: string;
   amount: number;
   date: string;
+  status: string;
   project_id: string | null;
-}
-
-const GOAL_KINDS = [
-  { value: "financeiro", label: "Valor financeiro", auto: false, money: true },
-  { value: "bf_orcados", label: "BF · Projetos orçados", auto: true, money: false },
-  { value: "bf_fechados", label: "BF · Projetos fechados", auto: true, money: false },
-  { value: "bf_faturamento", label: "BF · Faturamento recebido", auto: true, money: true },
-  { value: "quantidade", label: "Quantidade (manual)", auto: false, money: false },
-] as const;
-
-function kindInfo(k: string) {
-  return GOAL_KINDS.find((g) => g.value === k) ?? GOAL_KINDS[0];
 }
 
 const NONE = "__none__";
@@ -140,23 +142,16 @@ function MetasPage() {
         .map((g) => {
           const target = Number(g.target_amount);
           const info = kindInfo(g.goal_kind);
-          const year = String(g.goal_year ?? new Date().getFullYear());
-          let current = Number(g.current_amount);
-          if (g.goal_kind === "bf_orcados")
-            current = (projects.data ?? []).filter((p) => p.budget_date?.startsWith(year)).length;
-          else if (g.goal_kind === "bf_fechados")
-            current = (projects.data ?? []).filter((p) => p.closing_date?.startsWith(year)).length;
-          else if (g.goal_kind === "bf_faturamento")
-            current = (txs.data ?? [])
-              .filter((t) => t.project_id && t.type === "receita" && t.date.startsWith(year))
-              .reduce((s, t) => s + Math.abs(Number(t.amount)), 0);
-          const pct = target > 0 ? (current / target) * 100 : 0;
+          const year = goalYear(g);
+          // mesmo cálculo do dashboard (lib/goals): metas BF são calculadas ao vivo
+          const current = goalCurrent(g, projects.data ?? [], txs.data ?? []);
+          const pct = goalPct(current, target);
           const months = monthsUntil(g.target_date);
           const missing = Math.max(target - current, 0);
-          const fmt = (v: number) =>
-            info.money
-              ? formatBRL(v)
-              : `${v.toLocaleString("pt-BR")}${g.unit ? ` ${g.unit}` : info.auto ? " projetos" : ""}`;
+          const fmt = (v: number) => formatGoalAmount(v, g);
+          // saldo em contrato (só meta de faturamento): faixa cinza atrás da barra
+          const balance = goalContractBalance(g, projects.data ?? []);
+          const potential = balance > 0 ? goalPct(current + balance, target) : null;
           return {
             ...g,
             current_amount: current,
@@ -164,6 +159,8 @@ function MetasPage() {
             fmt,
             year,
             pct,
+            balance,
+            potential,
             missing,
             monthly: months > 0 ? missing / months : missing,
             months,
@@ -310,7 +307,13 @@ function MetasPage() {
                     de {row.fmt(Number(row.target_amount))}
                   </span>
                 </p>
-                <Progress value={Math.min(row.pct, 100)} />
+                <GoalProgress value={Math.min(row.pct, 100)} potential={row.potential} />
+                {row.balance > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Faixa cinza: saldo em contrato de {row.fmt(row.balance)} a receber. Com ele a meta
+                    chega a {formatPercent(row.potential ?? 0)}.
+                  </p>
+                ) : null}
                 <div className="flex items-center justify-between">
                   <Badge variant={row.pct >= 100 ? "secondary" : "outline"}>
                     {formatPercent(row.pct)}

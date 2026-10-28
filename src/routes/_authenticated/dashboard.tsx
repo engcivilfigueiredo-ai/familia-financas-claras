@@ -33,6 +33,14 @@ import { PeriodFilter } from "@/components/shared/period-filter";
 import { useTable } from "@/hooks/useFinance";
 import { useScope } from "@/hooks/useScope";
 import {
+  formatGoalAmount,
+  goalContractBalance,
+  goalCurrent,
+  goalPct,
+  type GoalProject,
+} from "@/lib/goals";
+import { GoalProgress } from "@/components/shared/goal-progress";
+import {
   accountBalance,
   cardOutstanding,
   inPeriod,
@@ -92,6 +100,9 @@ interface Goal {
   target_amount: number;
   current_amount: number;
   family_member_id: string | null;
+  goal_kind: string;
+  goal_year: number | null;
+  unit: string | null;
 }
 interface Budget {
   id: string;
@@ -123,6 +134,7 @@ function DashboardPage() {
   const assets = useTable<Asset>("assets");
   const liabilities = useTable<Liability>("liabilities");
   const goals = useTable<Goal>("financial_goals");
+  const goalProjects = useTable<GoalProject>("projects");
   const budgets = useTable<Budget>("budgets");
 
   const loading =
@@ -247,11 +259,17 @@ function DashboardPage() {
       (goals.data ?? [])
         .filter((g) => scope.matches(g.family_member_id))
         .slice(0, 4)
-        .map((g) => ({
-          ...g,
-          pct: Math.min((Number(g.current_amount) / (Number(g.target_amount) || 1)) * 100, 100),
-        })),
-    [goals.data, scope],
+        .map((g) => {
+          // mesmo cálculo da página Metas: metas BF são calculadas ao vivo (lib/goals)
+          const current = goalCurrent(g, goalProjects.data ?? [], transactions.data ?? []);
+          const target = Number(g.target_amount);
+          const rawPct = goalPct(current, target);
+          // faixa cinza: com o saldo em contrato, até onde a meta chegaria
+          const balance = goalContractBalance(g, goalProjects.data ?? []);
+          const potential = balance > 0 ? goalPct(current + balance, target) : null;
+          return { ...g, current, target, rawPct, pct: Math.min(rawPct, 100), balance, potential };
+        }),
+    [goals.data, goalProjects.data, transactions.data, scope],
   );
 
   if (loading) return <LoadingState rows={6} label="Carregando seu painel..." />;
@@ -470,9 +488,12 @@ function DashboardPage() {
                   <span className="flex items-center gap-1 font-medium">
                     <Target className="h-3.5 w-3.5" /> {g.name}
                   </span>
-                  <span className="text-muted-foreground">{formatPercent(g.pct / 100)}</span>
+                  <span className="text-muted-foreground">
+                    {formatGoalAmount(g.current, g)} / {formatGoalAmount(g.target, g)} ·{" "}
+                    {formatPercent(g.rawPct)}
+                  </span>
                 </div>
-                <Progress value={g.pct} />
+                <GoalProgress value={g.pct} potential={g.potential} />
               </div>
             ))}
           </CardContent>

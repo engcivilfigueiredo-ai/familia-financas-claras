@@ -11,6 +11,8 @@ export interface Tx {
   description: string;
   /** Parcela de dívida (Patrimônio) que originou este lançamento. */
   liability_id?: string | null;
+  /** Projeto (BF Engenharia) a que este lançamento está ligado. */
+  project_id?: string | null;
   account_id: string | null;
   credit_card_id: string | null;
   category_id: string | null;
