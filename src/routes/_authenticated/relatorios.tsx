@@ -21,6 +21,7 @@ import { ErrorState, LoadingState, PageHeader } from "@/components/shared/states
 import { PeriodFilter } from "@/components/shared/period-filter";
 import { useTable } from "@/hooks/useFinance";
 import { InvestmentEvolution } from "@/components/reports/investment-evolution";
+import { BudgetRule } from "@/components/reports/budget-rule";
 import { useScope } from "@/hooks/useScope";
 import {
   inPeriod,
@@ -64,6 +65,10 @@ function RelatoriosPage() {
   const transactions = useTable<Tx>("transactions");
   const categories = useTable<Named>("categories");
   const members = useTable<Named>("family_members");
+  const investments = useTable<{ id: string; family_member_id: string | null }>("investments");
+  const investmentMoves = useTable<{ investment_id: string; type: string; amount: number; date: string }>(
+    "investment_transactions",
+  );
 
   const [periodKey, setPeriodKey] = useState<PeriodKey>("last-6");
   const [custom, setCustom] = useState({ from: "", to: "" });
@@ -153,6 +158,21 @@ function RelatoriosPage() {
 
   const expenseTotal = byCategory.reduce((s, c) => s + c.value, 0);
 
+  // Aportes em investimentos do período (compõem o grupo "Poupança e dívidas" da regra 50-30-20)
+  const contributions = useMemo(() => {
+    const owner = new Map((investments.data ?? []).map((i) => [i.id, i.family_member_id]));
+    const cents = (investmentMoves.data ?? [])
+      .filter(
+        (m) =>
+          m.type === "aplicação" &&
+          owner.has(m.investment_id) &&
+          scope.matches(owner.get(m.investment_id) ?? null) &&
+          inPeriod(m.date, period),
+      )
+      .reduce((s, m) => s + Math.round(Math.abs(Number(m.amount)) * 100), 0);
+    return cents / 100;
+  }, [investments.data, investmentMoves.data, scope, period]);
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -201,6 +221,8 @@ function RelatoriosPage() {
               </CardContent>
             </Card>
           </div>
+
+          <BudgetRule txs={txs} income={totals.income} investmentContributions={contributions} />
 
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
